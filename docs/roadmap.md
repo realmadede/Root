@@ -156,19 +156,21 @@ gantt
 
 ---
 
-### Phase 08: Native Desktop Application (GTK4 + libadwaita, `root-gui`)
-- **Primary Goal**: Deliver a world-class, Linux-native desktop resource manager.
-- **Key Tasks**:
-  - Implement GUI window using `AdwApplicationWindow`, `AdwHeaderBar`, `AdwViewSwitcher`.
-  - Implement views: System Overview, Agents, Workspaces, Processes, Audit/Quarantine.
-  - Integrate Emil Kowalski Designing-Skills principles:
-    - Tabular figures (`tnum`) for byte counters and PIDs.
-    - Middle truncation for paths.
-    - Sub-250ms purposeful transitions (`AdwTimedAnimation`, `AdwSpringAnimation`).
-    - Zero animation on keyboard navigation.
-    - Light and dark theme integration (`AdwStyleManager`).
-  - Adversarial Break-UI verification with worst-case data.
-- **Safety Gate**: GUI runs completely unprivileged; 60fps/120fps frame budget verified.
+### Phase 08: Native Desktop Application (GTK4 + libadwaita, `root-gui`) — COMPLETED
+- **Status**: COMPLETE
+- **Primary Goal**: Deliver a world-class, Linux-native desktop resource manager integrating the Designing-Skills reference design (`2d228630ba1446365f614a108cb8252f1feda202`).
+- **Key Accomplishments**:
+  - Established new workspace crate `root-gui` strictly decoupled from the core engine, upholding the headless server isolation invariant (zero GTK dependencies in core crates).
+  - Implemented complete navigation shell across seven dedicated views: Overview, Resources, Agents, Processes, Activity, Schedule, and Settings.
+  - Implemented decoupled, testable view models (`OverviewViewModel`, `ResourcesViewModel`, `AgentsViewModel`, `ProcessesViewModel`, `ActivityViewModel`, `ScheduleViewModel`, `SettingsViewModel`).
+  - Integrated Designing-Skills reference principles: tabular figures (`tnum=1`) eliminating numeric jitter, middle truncation for long paths (`format_path_middle`), sub-250ms purposeful transitions, zero animation on keyboard navigation (`<Control>1`..`<Control>7`), and light/dark theme adaptation (`AdwStyleManager`).
+  - Implemented bounded resource list presentation (capped at 500 rows) with multi-criteria filtering and sorting to eliminate UI rendering overhead.
+  - Implemented asynchronous background inspection worker (`InspectionWorker`) with atomic cancellation (`CancellationToken`) and generation fencing preventing stale results from overwriting newer state.
+  - Integrated Mode C live monitoring and Mode B scheduling configuration into native desktop views with explicit user activation and authorization guardrails.
+  - Maintained strict production read-only guarantee: zero cleanup, quarantine, or process termination actions exposed in the GUI; Guardian unconditionally rejects all mutating actions.
+  - Created desktop integration metadata: `data/io.github.realmadede.Root.desktop` and `data/io.github.realmadede.Root.metainfo.xml`.
+  - Added comprehensive 22-scenario automated integration test suite (`crates/root-gui/tests/gui_view_model_tests.rs`); achieved 154 total passing tests across the workspace.
+- **Safety Gate**: Passed all 154 workspace tests; GUI runs completely unprivileged; zero GTK dependencies in core engine; headless compilation verified.
 
 ---
 

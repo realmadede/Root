@@ -1,0 +1,30 @@
+[package]
+name = "root-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Native Linux desktop graphical interface for Root using GTK4 and libadwaita"
+
+[dependencies]
+root-core = { path = "../root-core" }
+root-platform = { path = "../root-platform" }
+root-guardian = { path = "../root-guardian" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+# Optional GTK4 and libadwaita native graphical bindings
+# When libgtk-4-dev and libadwaita-1-dev C development libraries and pkg-config
+# are present on the host system, the `gtk` feature enables the libadwaita window layer.
+gtk4 = { version = "0.9", optional = true }
+libadwaita = { version = "0.7", optional = true }
+
+[features]
+default = []
+gtk = ["dep:gtk4", "dep:libadwaita"]
+
+[dev-dependencies]
+tempfile = { workspace = true }

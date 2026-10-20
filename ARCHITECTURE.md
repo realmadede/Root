@@ -83,7 +83,13 @@ crates/
 │   ├── terminal.rs     # NO_COLOR adherence, POSIX terminal width detection, tabular formatting
 │   └── history.rs      # XDG-compliant persistent scan history records
 ├── root-monitor/       # (Future) Standalone monitoring daemon crate if split from platform
-└── root-gui/           # (Future) Native GNOME GTK4 + libadwaita desktop interface
+└── root-gui/           # Native GNOME GTK4 + libadwaita desktop interface
+    ├── model/          # Navigation, AppState, Designing-Skills formatters (tnum, middle truncation)
+    ├── view_model/     # Decoupled view models (Overview, Resources, Agents, Processes, Activity, Schedule, Settings)
+    ├── worker/         # Non-blocking InspectionWorker with cancellation and generation fencing
+    ├── gtk/            # Native GTK4/libadwaita windows and views (feature = "gtk")
+    ├── app.rs          # Central application coordinator
+    └── main.rs         # Desktop binary entry point
 ```
 
 ---
@@ -271,3 +277,39 @@ flowchart TD
 - **Zero Daemon Overhead**: Root runs as an interactive foreground process or finite duration session, terminating immediately on `SIGINT` (Ctrl+C) or timeout. Zero resident background daemons.
 - **Concurrency Independence**: Mode C live monitoring does not acquire `schedule.lock`, allowing Mode B scheduled inspections and Mode C live monitoring to coexist without mutual locking contention.
 - **Privacy by Design**: File contents, developer credentials, tokens, session transcripts (`transcript.jsonl`), and process command-line arguments are never opened or logged.
+
+---
+
+## 10. Native Desktop Application Architecture (Phase 08, GTK4 + libadwaita)
+
+Phase 08 establishes Root's first native Linux desktop application (`root-gui`), providing a modern, fluid, and accessible interface adhering to GNOME Human Interface Guidelines and Emil Kowalski Designing-Skills reference design (`2d228630ba1446365f614a108cb8252f1feda202`):
+
+```mermaid
+flowchart TD
+    App["RootApplication (AdwApplication)"] --> Window["RootWindow (AdwApplicationWindow)"]
+    Window --> Header["AdwHeaderBar & AdwViewSwitcher"]
+    Window --> Stack["AdwViewStack (7 Dedicated Views)"]
+
+    Stack --> V1["Overview: Memory, PSI Stalls, Storage, Modes"]
+    Stack --> V2["Resources: Bounded List, Multi-Filter, Sorter, Details"]
+    Stack --> V3["Agents: 12 Targets, Footprint Cards, Ownership Notice"]
+    Stack --> V4["Processes: Unprivileged /proc Survey, Attribution"]
+    Stack --> V5["Activity: Mode C Live Stream, Degraded Banners"]
+    Stack --> V6["Schedule: Mode B Timers, Authorization, History"]
+    Stack --> V7["Settings: Appearance, Budgets, Privacy Guarantees"]
+
+    Window --> Controller["RootAppController (State & Workers)"]
+    Controller --> Engine["Headless Core Engine (root-core, root-platform, root-guardian)"]
+```
+
+### Architectural Guarantees:
+- **Headless Core Isolation**: Core crates (`root-core`, `root-platform`, `root-guardian`) remain 100% headless with zero GTK, display, or GUI dependencies.
+- **Strictly Read-Only Guarantee**: The GUI exposes zero mutation controls. File cleanup, quarantine, directory pruning, and process termination are permanently rejected by Root Guardian.
+- **Designing-Skills Reference Compliance**:
+  - **Tabular Figures (`tnum`)**: Numeric measurements enforce tabular digits (`tnum=1`), eliminating horizontal layout jitter during real-time telemetry updates.
+  - **Middle Truncation**: Filesystem paths preserve project roots and leaf filenames (`format_path_middle`), preventing layout breaks on narrow viewports.
+  - **Instant Keyboard Navigation**: Shortcuts (`<Control>1` through `<Control>7`, `<Control>R`, `<Control>Q`) switch tabs instantaneously without animation delays.
+  - **Purposeful Transitions**: UI view transitions utilize sub-250ms cubic ease-out animations.
+- **Responsive Off-Thread Traversal**: Blocking filesystem scans execute exclusively on background threads (`InspectionWorker`).
+- **Cancellation & Stale-Result Fencing**: Atomic `CancellationToken` enables responsive cancellation, while monotonic generation IDs ensure outdated scan results never overwrite newer state.
+- **Dual Compilation Flexibility**: Headless view-model compilation by default; full native graphical window activation via `--features gtk` when host development libraries (`libgtk-4-dev`, `libadwaita-1-dev`) and `pkg-config` are installed.

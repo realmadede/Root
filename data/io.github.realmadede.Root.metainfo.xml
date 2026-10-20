@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.realmadede.Root</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Root</name>
+  <summary>Secure Linux resource manager and agent footprint inspector</summary>
+  <description>
+    <p>
+      Root is a deterministic system resource management utility designed to help developers
+      understand resources accumulated through agentic and conversational coding workflows.
+    </p>
+    <p>
+      Root inspects Linux kernel memory, process trees, and filesystem artifacts without
+      modifying user files or requiring privileged background daemons.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.realmadede.Root.desktop</launchable>
+  <url type="homepage">https://github.com/realmadede/Root</url>
+  <provides>
+    <binary>root-gui</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-10-20">
+      <description>
+        <p>Initial release featuring native GTK4 and libadwaita desktop interface.</p>
+      </description>
+    </release>
+  </releases>
+</component>
