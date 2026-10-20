@@ -28,79 +28,56 @@ pub fn build_and_present_window(app: &adw::Application) {
     let overview_title = gtk4::Label::new(Some("System Overview"));
     overview_title.add_css_class("title-1");
     overview_box.append(&overview_title);
-    view_stack.add_titled_with_icon(
-        &overview_box,
-        Some("overview"),
-        "Overview",
-        "view-dashboard-symbolic",
-    );
+    let page1 = view_stack.add_titled(&overview_box, Some("overview"), "Overview");
+    page1.set_icon_name(Some("view-dashboard-symbolic"));
 
     // 2. Resources Page
     let resources_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
     let resources_title = gtk4::Label::new(Some("Resource Explorer"));
     resources_title.add_css_class("title-1");
     resources_box.append(&resources_title);
-    view_stack.add_titled_with_icon(
-        &resources_box,
-        Some("resources"),
-        "Resources",
-        "drive-harddisk-symbolic",
-    );
+    let page2 = view_stack.add_titled(&resources_box, Some("resources"), "Resources");
+    page2.set_icon_name(Some("drive-harddisk-symbolic"));
 
     // 3. Agents Page
     let agents_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
     let agents_title = gtk4::Label::new(Some("Agent Discovery"));
     agents_title.add_css_class("title-1");
     agents_box.append(&agents_title);
-    view_stack.add_titled_with_icon(&agents_box, Some("agents"), "Agents", "system-run-symbolic");
+    let page3 = view_stack.add_titled(&agents_box, Some("agents"), "Agents");
+    page3.set_icon_name(Some("system-run-symbolic"));
 
     // 4. Processes Page
     let processes_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
     let processes_title = gtk4::Label::new(Some("Process Inspection"));
     processes_title.add_css_class("title-1");
     processes_box.append(&processes_title);
-    view_stack.add_titled_with_icon(
-        &processes_box,
-        Some("processes"),
-        "Processes",
-        "application-x-executable-symbolic",
-    );
+    let page4 = view_stack.add_titled(&processes_box, Some("processes"), "Processes");
+    page4.set_icon_name(Some("application-x-executable-symbolic"));
 
     // 5. Activity Page
     let activity_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
     let activity_title = gtk4::Label::new(Some("Live Activity Monitoring"));
     activity_title.add_css_class("title-1");
     activity_box.append(&activity_title);
-    view_stack.add_titled_with_icon(
-        &activity_box,
-        Some("activity"),
-        "Activity",
-        "utilities-system-monitor-symbolic",
-    );
+    let page5 = view_stack.add_titled(&activity_box, Some("activity"), "Activity");
+    page5.set_icon_name(Some("utilities-system-monitor-symbolic"));
 
     // 6. Schedule Page
     let schedule_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
     let schedule_title = gtk4::Label::new(Some("Scheduled Inspections"));
     schedule_title.add_css_class("title-1");
     schedule_box.append(&schedule_title);
-    view_stack.add_titled_with_icon(
-        &schedule_box,
-        Some("schedule"),
-        "Schedule",
-        "alarm-symbolic",
-    );
+    let page6 = view_stack.add_titled(&schedule_box, Some("schedule"), "Schedule");
+    page6.set_icon_name(Some("alarm-symbolic"));
 
     // 7. Settings Page
     let settings_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
     let settings_title = gtk4::Label::new(Some("Settings"));
     settings_title.add_css_class("title-1");
     settings_box.append(&settings_title);
-    view_stack.add_titled_with_icon(
-        &settings_box,
-        Some("settings"),
-        "Settings",
-        "emblem-system-symbolic",
-    );
+    let page7 = view_stack.add_titled(&settings_box, Some("settings"), "Settings");
+    page7.set_icon_name(Some("emblem-system-symbolic"));
 
     // View switcher in header
     let switcher = adw::ViewSwitcher::new();

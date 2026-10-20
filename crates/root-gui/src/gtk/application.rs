@@ -41,3 +41,10 @@ impl RootGtkApplication {
         self.app.run_with_args(&empty_args).into()
     }
 }
+
+#[cfg(feature = "gtk")]
+impl Default for RootGtkApplication {
+    fn default() -> Self {
+        Self::new()
+    }
+}

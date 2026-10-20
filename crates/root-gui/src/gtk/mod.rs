@@ -10,7 +10,6 @@ pub use application::RootGtkApplication;
 /// Returns exit code (0 for success).
 #[cfg(feature = "gtk")]
 pub fn run_desktop_app() -> i32 {
-    use gtk4::prelude::*;
     let app = RootGtkApplication::new();
     app.run()
 }
