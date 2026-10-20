@@ -122,9 +122,13 @@ pub enum ScheduleCommands {
 
     /// Enable periodic scheduled inspection
     Enable {
-        /// Recurrence interval: daily, weekly, or valid OnCalendar expression
+        /// Recurrence interval: hourly, daily, weekly, or valid OnCalendar expression
         #[arg(short, long)]
         interval: Option<String>,
+
+        /// Inspection profile: lightweight, standard, or comprehensive
+        #[arg(short, long)]
+        profile: Option<String>,
 
         /// Comma-separated list of target directories to scan
         #[arg(short, long, value_delimiter = ',')]
@@ -133,6 +137,30 @@ pub enum ScheduleCommands {
         /// Enable desktop notifications upon scan completion
         #[arg(long, default_value_t = false)]
         notify: bool,
+
+        /// Enable catch-up execution after workstation wake or power-on (disabled by default)
+        #[arg(long, default_value_t = false)]
+        catch_up: bool,
+
+        /// Restrict scheduled scans to AC power only (skip on battery)
+        #[arg(long, default_value_t = false)]
+        ac_only: bool,
+
+        /// Maximum duration budget in seconds
+        #[arg(long)]
+        max_duration: Option<u64>,
+
+        /// Maximum scanned entries budget
+        #[arg(long)]
+        max_entries: Option<usize>,
+
+        /// Maximum traversal depth budget
+        #[arg(long)]
+        max_depth: Option<usize>,
+
+        /// Explicit path to Root binary (defaults to current running executable)
+        #[arg(long)]
+        exec_path: Option<PathBuf>,
 
         /// Bypass interactive confirmation prompt
         #[arg(long, default_value_t = false)]

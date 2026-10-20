@@ -114,11 +114,30 @@ pub fn dispatch_command(command: Commands) -> Result<()> {
             }
             ScheduleCommands::Enable {
                 interval,
+                profile,
                 targets,
                 notify,
+                catch_up,
+                ac_only,
+                max_duration,
+                max_entries,
+                max_depth,
+                exec_path,
                 non_interactive,
             } => {
-                schedule::run_schedule_enable(interval, targets, notify, non_interactive)?;
+                schedule::run_schedule_enable(schedule::ScheduleEnableOptions {
+                    interval,
+                    profile,
+                    targets,
+                    notify,
+                    catch_up,
+                    ac_only,
+                    max_duration,
+                    max_entries,
+                    max_depth,
+                    exec_path,
+                    non_interactive,
+                })?;
             }
             ScheduleCommands::Disable => {
                 schedule::run_schedule_disable()?;

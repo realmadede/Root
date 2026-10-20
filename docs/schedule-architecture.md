@@ -16,122 +16,159 @@ Mode B is governed by foundational architectural invariants:
 
 ---
 
-## 2. systemd User Unit Design & Hardening
+## 2. systemd User Unit Security Model & Directives
 
-Mode B integrates natively with systemd through two user-level unit files installed into `$XDG_CONFIG_HOME/systemd/user/` (defaulting to `~/.config/systemd/user/`):
+Root implements a verified security model for `systemd --user` units that explicitly accounts for unprivileged user service constraints:
 
-### 2.1. The Service Unit (`root-inspect.service`)
+### 2.1. Critical Security Assumptions & Realities
+- **No `User=` Directives**: In `systemd --user` session managers, `User=` or `User=%h` directives are invalid and rejected. The service manager inherently executes processes under the UID of the running user session.
+- **`ProtectHome=read-only` Limitations**: In user services, sandboxing directives such as `ProtectHome=` or `ProtectSystem=` cannot be assumed to function without unprivileged user namespaces (`kernel.unprivileged_userns_clone = 1`), and `ProtectHome=read-only` does not prevent reading private user credentials. Root instead relies on internal Unix UID checking and strict path validation.
+- **XDG State Path Independence**: Root does not assume systemd's built-in `StateDirectory=` specifiers match Root's runtime configuration. Root explicitly determines and manages its own paths according to the XDG Base Directory specification (`$XDG_STATE_HOME/root` and `$XDG_CONFIG_HOME/root`).
+- **Mandatory Protections vs Optional Hardening**: Root enforces internal mandatory validation (path safety, ownership checks, Guardian read-only policies) within pure Rust code, treating systemd directives (`Nice=19`, `NoNewPrivileges=true`, `IOSchedulingClass=idle`) as defense-in-depth hardening.
+
+### 2.2. Service Unit Specification (`root-inspect.service`)
 
 ```ini
+# Root System Resource Inspection Service
 [Unit]
-Description=Root Scheduled Resource Inspection (Mode B)
+Description=Root System Resource Inspection (Mode B Scheduled)
 Documentation=https://github.com/realmadede/Root
-ConditionUser=!root
+ConditionPathExists=/path/to/canonical/root
+ConditionACPower=true   # Included only when ac_power_only is configured
 
 [Service]
 Type=oneshot
-ExecStart=/path/to/root schedule run
+ExecStart=/path/to/canonical/root schedule run
 Nice=19
 IOSchedulingClass=idle
+IOSchedulingPriority=7
 TimeoutSec=120
 NoNewPrivileges=true
-StandardOutput=journal
-StandardError=journal
 ```
 
-#### Hardening & Security Directives:
-- **`Type=oneshot`**: The process runs to completion and exits immediately. Zero background memory footprint.
-- **`ConditionUser=!root`**: Systemd verifies the unit is never executed under UID 0, enforcing unprivileged execution.
-- **`Nice=19`**: Sets the lowest CPU priority, ensuring user builds, interactive shells, and desktop applications retain scheduling priority.
-- **`IOSchedulingClass=idle`**: Configures the BFQ/CFQ block I/O scheduler to service Root filesystem reads only when storage queues are otherwise idle.
-- **`TimeoutSec=120`**: Hardware watchdog preventing runaway or stalled scans on unresponsive or stalling mounts.
-- **`NoNewPrivileges=true`**: Prevents the process and its descendants from gaining additional capabilities through setuid binaries.
-- **Direct Executable Invocation**: Root directly targets the verified binary path without wrapping execution in `sh -c` or intermediate shell scripts, eliminating shell injection vectors.
+#### Directive Analysis:
+- **`ConditionPathExists`**: Prevents the unit from triggering if the Root executable has been uninstalled or relocated.
+- **`ConditionACPower=true`**: Optional battery-aware scheduling directive preventing execution on battery power.
+- **`Type=oneshot`**: Ensures the process executes to completion and exits immediately. Zero background memory footprint.
+- **`Nice=19`**: Sets the lowest POSIX CPU scheduling priority, yielding cycles to interactive developer tasks.
+- **`IOSchedulingClass=idle`**: Configures the BFQ/CFQ block scheduler to yield I/O queues whenever other processes request disk access.
+- **`TimeoutSec=120`**: Watchdog timeout terminating hung or unresponsive scans.
+- **`NoNewPrivileges=true`**: Prevents privilege escalation through setuid binaries.
+- **Direct Executable Invocation**: Invokes the verified binary path directly; shell wrappers (`sh -c`) are prohibited to eliminate command injection vectors.
 
-### 2.2. The Timer Unit (`root-inspect.timer`)
+### 2.3. Timer Unit Specification (`root-inspect.timer`)
 
 ```ini
+# Root Scheduled Resource Inspection Timer
 [Unit]
-Description=Periodic Timer for Root Resource Inspection (Mode B)
+Description=Root Scheduled Resource Inspection Timer
 Documentation=https://github.com/realmadede/Root
-ConditionUser=!root
 
 [Timer]
 OnCalendar=daily
-Persistent=true
+Persistent=false
 RandomizedDelaySec=15m
 
 [Install]
 WantedBy=timers.target
 ```
 
-#### Reliability & Load-Spreading Directives:
-- **`OnCalendar`**: Maps to verified schedules (`daily`, `weekly`, or strict custom OnCalendar patterns).
-- **`Persistent=true`**: If the workstation was suspended or powered down when the timer was scheduled to trigger, systemd executes the missed inspection immediately upon workstation wake.
-- **`RandomizedDelaySec=15m`**: Desynchronizes scheduled inspections, avoiding simultaneous load spikes with other system cron and timer events.
+#### Timer Mechanics & Post-Login Load Mitigation:
+- **Interval Preferences**: Daily and weekly intervals are preferred. Hourly intervals require explicit opt-in.
+- **`Persistent=false` by Default**: Missed timer triggers during power-off or suspension do **not** trigger catch-up executions upon login. This avoids unexpected disk thrashing and high load immediately after workstation boot or login.
+- **Configurable Catch-Up**: Users can explicitly enable catch-up execution (`--catch-up`) when deterministic historical auditing is prioritized over login responsiveness.
+- **`RandomizedDelaySec=15m`**: Desynchronizes scheduled timer executions, preventing simultaneous load spikes with other scheduled maintenance tasks.
 
 ---
 
-## 3. Concurrency Protection & Non-Blocking File Locking
+## 3. Executable Validation & Command Security
 
-To prevent race conditions, cache thrashing, and storage bottlenecks caused by concurrent scans (e.g. manual CLI execution running simultaneously with a scheduled timer tick), Mode B implements non-blocking POSIX file locking:
-
-1. Prior to commencing traversal, `root schedule run` acquires an exclusive lock on `$XDG_STATE_HOME/root/schedule.lock` using `libc::flock(fd, LOCK_EX | LOCK_NB)`.
-2. If another instance of Root is actively scanning, the kernel returns `EWOULDBLOCK` / `EAGAIN`.
-3. Root detects the lock collision, logs a clean diagnostic notice, and exits cleanly with status 0 without thrashing disk I/O or waiting indefinitely.
-4. When execution finishes, the lock is released and the file handle closed.
-
----
-
-## 4. Privacy-Preserving Desktop Notifications
-
-Mode B provides optional FreeDesktop desktop notifications upon completion of scheduled inspections, informing developers of resource state without leaking sensitive workstation metadata:
-
-### 4.1. Privacy Safeguards
-- **Zero Sensitive Data in Notification Bodies**: Notification payloads never include raw filesystem paths, usernames, project names, active branch names, repository tokens, or conversation transcript contents.
-- **Summary Metrics Only**: Notifications report aggregate statistics only (e.g. `Root Scheduled Inspection: Examined 1,420 resources across 3 targets. Zero mutations performed.`).
-- **Low-Distraction Urgency**: Notifications are dispatched with `urgency=low` to respect focus modes and do not trigger audio alerts.
-
-### 4.2. Dispatch Architecture
-1. **Primary Mechanism (`notify-send`)**: Dispatches notifications via the standard FreeDesktop `notify-send` binary with explicit app-name (`--app-name=Root`) and low urgency (`--urgency=low`).
-2. **Fallback Mechanism (`dbus-send`)**: If `notify-send` is absent, falls back to raw D-Bus invocation targeting the `org.freedesktop.Notifications` interface.
-3. **Graceful Non-Fatal Degradation**: In headless servers, container environments, or environments without a running D-Bus session or notification daemon, notification dispatch returns `Ok(false)` without failing the scheduled inspection run.
+To prevent arbitrary command substitution and binary hijacking:
+1. **Canonicalization**: The executable path is resolved and canonicalized (`validate_executable`) via `fs::canonicalize`.
+2. **File & Mode Verification**: Validates that the path is an existing regular file with Unix execution permissions (`mode & 0o111 != 0`).
+3. **Interpreter Refusal**: Refuses to configure shell interpreters (`sh`, `bash`) or language runtimes (`python`, `python3`) as the Root executable.
+4. **Current Executable Resolution**: When enabling scheduling without `--exec-path`, Root resolves `std::env::current_exe()` and validates the resulting binary.
 
 ---
 
-## 5. State Persistence & Retention Policy
+## 4. Inspection Profiles & Resource Budgets
 
-Mode B records configuration and bounded run telemetry within the XDG state directory hierarchy:
+Root introduces three deterministic inspection profiles to balance audit depth against system overhead:
 
-### 5.1. File Hierarchy
-- **Schedule Configuration**: `$XDG_CONFIG_HOME/root/schedule.json` (mode `0o644`) storing enabled state, interval, scan targets, and notification preference.
-- **Schedule Run History**: `$XDG_STATE_HOME/root/schedule_history.json` (mode `0o600`) storing historical execution summaries.
-- **Schedule Run Lock**: `$XDG_STATE_HOME/root/schedule.lock` protecting against overlapping runs.
+| Profile | Traversal Depth | Entry Limit | Duration Budget | Memory Limit (RSS) | Intended Use |
+|:---|:---:|:---:|:---:|:---:|:---|
+| **`Lightweight`** | 4 | 10,000 | 15 seconds | 256 MiB | Shallow check of top-level agent scratchpads and marker files |
+| **`Standard`** *(Default)* | 16 | 50,000 | 60 seconds | 512 MiB | General agent and toolchain footprint discovery across projects |
+| **`Comprehensive`** | 32 | 150,000 | 120 seconds | 1,024 MiB | Deep recursive audit across extensive multi-repo workspaces |
 
-### 5.2. Strict Permissions & Confidentiality
-- Both the configuration and history files are created with strict POSIX permissions (`0o600` on history, `0o700` on parent directories), preventing other unprivileged users on multi-tenant machines from reading inspection summaries.
-- Atomic file updates: Writes are serialized to temporary sibling files (`schedule.json.tmp`) and atomically swapped into place using `rename`, ensuring crash-resilience against sudden power loss.
-
-### 5.3. Retention Pruning Policy
-To maintain a deterministic, bounded storage footprint:
-- The history journal maintains a hard maximum of **50 execution records**.
-- Upon completion of every inspection run, `prune_history` trims older entries chronologically, retaining only the most recent 50 runs.
-- Malformed history files (e.g. partial writes or manual user corruption) are gracefully backed up to `.corrupt` and replaced with an empty history list rather than crashing subsequent runs.
+### Budget Enforcement & Incomplete Scan Integrity:
+- **Scanned Entries Budget**: Traversal halts immediately when the entry count limit is reached.
+- **Wall-Clock Timeout**: Traversal enforces operational cutoff when duration exceeds the profile budget.
+- **Memory RSS Budget**: During inspection, Root monitors its own RSS via `/proc/self/statm`. If memory exceeds the profile limit, traversal halts early.
+- **Honest Status Reporting**: Scans that halt due to budget exhaustion or timeouts are strictly recorded as **`Incomplete`** with the explicit reason recorded. Partial scans are **never** reported as `Completed`.
 
 ---
 
-## 6. Target Safety Validation & Deleted Target Resilience
+## 5. Battery and Workload Awareness
 
-### 6.1. Target Safety Validation
-When configuring scan targets via `root schedule enable --target <path>`, Root enforces strict safety boundaries:
-- **Canonicalization**: Targets are resolved and canonicalized against symlinks.
-- **Root Directory Rejection**: Root directory `/` is rejected.
-- **Pseudo-Filesystem Rejection**: `/proc`, `/sys`, `/dev` are unconditionally rejected.
-- **System Directory Rejection**: `/usr`, `/bin`, `/sbin`, `/etc`, `/lib`, `/boot`, `/var` are unconditionally rejected.
-- **Control Character Rejection**: Paths containing control characters (newlines, null bytes, tabs) are rejected.
+Root incorporates preflight checks to prevent scheduled scans from degrading laptop battery life or compounding system resource contention:
 
-### 6.2. Deleted Target Handling
-If a target directory configured for scheduled scanning is renamed, unmounted, or deleted by the user between scheduled timer runs:
-- `root schedule run` inspects target existence before starting traversal.
-- Missing targets are logged as non-fatal warnings and skipped.
-- The scan continues evaluating remaining valid targets and completes successfully.
+### 5.1. Battery-Aware Scheduling (`--ac-only`)
+- When enabled via `--ac-only`, Root checks `/sys/class/power_supply/` prior to scanning.
+- If an AC/Mains adapter is offline or any battery reports `Discharging`, Root logs a notice and records the run as `Deferred: System running on battery power (AC-only mode)`.
+- If power supply telemetry is absent (e.g. containers, VMs), Root assumes AC power.
+
+### 5.2. System Memory Pressure Preflight
+- Prior to starting filesystem traversal, Root inspects host memory metrics.
+- Evaluates `/proc/pressure/memory` (PSI) 10-second stall percentage against the configured threshold (default: 60%).
+- Verifies that `/proc/meminfo` available memory (`MemAvailable`) exceeds 200 MiB.
+- If memory pressure is elevated, Root defers execution with status `Deferred: Host memory pressure exceeds safe operational threshold`.
+
+---
+
+## 6. Transactional Installation & Collision Protection
+
+To prevent partial configuration corruption or accidental overwriting of unrelated unit files:
+
+1. **Collision Protection**: Before modifying user units, `LinuxScheduler` inspects any existing `root-inspect.service` or `root-inspect.timer`. If an existing file does not contain the Root header marker (`Root System Resource Inspection`), installation halts with an error (`Collision: existing unit file was not created by Root`).
+2. **Staged Writes**: Unit files are generated and written to sibling temporary files (`.tmp`) with mode `0o644`.
+3. **Transactional Swap**: Temporary files are atomically renamed into place.
+4. **Rollback on Failure**: If the second unit file fails to write, or if `systemctl --user daemon-reload` returns an error, Root rolls back by removing installed units and restoring clean state.
+5. **Separation of Installation and Activation**: Unit generation and timer activation are distinct operations; automated tests never activate host timers.
+
+---
+
+## 7. Concurrency Protection & Non-Blocking Locking
+
+Root implements kernel-managed advisory locking to prevent overlapping executions:
+- **Lock Target**: `$XDG_STATE_HOME/root/schedule.lock`.
+- **Acquisition**: `libc::flock(fd, LOCK_EX | LOCK_NB)`.
+- **Contention Differentiation**: If another scheduled inspection is actively running, `flock` returns `EWOULDBLOCK`. Root logs a clean notice and records a `Deferred` entry (`Skipped: Concurrently running scheduled inspection`).
+- **Non-Interference with Manual Inspections**: Manual CLI inspection commands (`root inspect`, `root discover`, `root scan --dry-run`) do not acquire the scheduled lock and are never blocked by scheduled runs.
+- **Automatic Release**: The kernel guarantees lock release when the process terminates, preventing deadlocks across system reboots or sudden crashes.
+
+---
+
+## 8. Privacy-Preserving Desktop Notifications & Deduplication
+
+Desktop notifications are delivered via FreeDesktop interfaces (`notify-send` or D-Bus) with strict privacy safeguards:
+
+### 8.1. Confidentiality Boundaries
+- **Zero Sensitive Metadata**: Notification bodies strictly omit filesystem paths, usernames, project names, active branch names, repository tokens, or conversation transcript contents.
+- **Summary Metrics Only**: E.g. `Root Inspection Completed: Examined 1,420 resources across 3 targets with zero mutations.`
+- **No False Claims**: Notifications never claim resources are safely recoverable solely based on discovery rule matches.
+
+### 8.2. Notification Deduplication
+- After each inspection, Root computes a privacy-safe cryptographic fingerprint of aggregate findings:
+  `fingerprint = SHA256(status:total_inspected:total_findings)`
+- If the fingerprint matches `config.last_notification_fingerprint`, Root suppresses the desktop notification to avoid alert fatigue.
+- When findings change, a notification is dispatched and the fingerprint updated in `schedule.json`.
+
+---
+
+## 9. State Persistence & Retention Policy
+
+- **Configuration Storage**: `$XDG_CONFIG_HOME/root/schedule.json` (mode `0o600`).
+- **History Journal**: `$XDG_STATE_HOME/root/schedule_history.json` (mode `0o600`).
+- **Retention Cap**: Strictly bounded at **50 records**. Older records are chronologically pruned.
+- **Crash Resilience**: State updates use staged sibling writes and atomic `rename`. Corrupted files are backed up to `.corrupt` and replaced with clean default state.

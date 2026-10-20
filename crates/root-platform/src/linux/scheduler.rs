@@ -1,6 +1,6 @@
 use root_core::{
     error::{Result, RootError},
-    model::ScheduleInterval,
+    model::{validate_executable, ScheduleInterval, ScheduleRunStatus},
 };
 use std::{
     fs::{self, Permissions},
@@ -9,6 +9,9 @@ use std::{
     process::Command,
 };
 
+/// Root identifier marker embedded in all Root-managed systemd units.
+pub const ROOT_UNIT_MARKER: &str = "Root System Resource Inspection";
+
 /// Utility for generating security-hardened systemd user service and timer units.
 pub struct SystemdUnitGenerator;
 
@@ -16,8 +19,12 @@ impl SystemdUnitGenerator {
     /// Generates the contents of `root-inspect.service`.
     ///
     /// Hardened with `NoNewPrivileges=true`, `Nice=19`, `IOSchedulingClass=idle`,
-    /// and strict non-shell command execution.
-    pub fn generate_service_unit(exec_path: &Path, additional_args: &[&str]) -> String {
+    /// unprivileged user execution, and direct executable invocation.
+    pub fn generate_service_unit(
+        exec_path: &Path,
+        additional_args: &[&str],
+        ac_power_only: bool,
+    ) -> String {
         let exec_str = exec_path.to_string_lossy();
         let args_str = if additional_args.is_empty() {
             String::new()
@@ -25,11 +32,19 @@ impl SystemdUnitGenerator {
             format!(" {}", additional_args.join(" "))
         };
 
+        let ac_directive = if ac_power_only {
+            "ConditionACPower=true\n"
+        } else {
+            ""
+        };
+
         format!(
-            "[Unit]\n\
+            "# Root System Resource Inspection Service\n\
+             [Unit]\n\
              Description=Root System Resource Inspection (Mode B Scheduled)\n\
              Documentation=https://github.com/realmadede/Root\n\
              ConditionPathExists={}\n\
+             {}\
              \n\
              [Service]\n\
              Type=oneshot\n\
@@ -39,28 +54,55 @@ impl SystemdUnitGenerator {
              IOSchedulingPriority=7\n\
              TimeoutSec=120\n\
              NoNewPrivileges=true\n",
-            exec_str, exec_str, args_str
+            exec_str, ac_directive, exec_str, args_str
         )
     }
 
     /// Generates the contents of `root-inspect.timer`.
-    pub fn generate_timer_unit(interval: &ScheduleInterval) -> Result<String> {
+    pub fn generate_timer_unit(interval: &ScheduleInterval, catch_up: bool) -> Result<String> {
         let on_calendar = interval.to_calendar_spec()?;
+        let persistent_str = if catch_up { "true" } else { "false" };
 
         Ok(format!(
-            "[Unit]\n\
+            "# Root Scheduled Resource Inspection Timer\n\
+             [Unit]\n\
              Description=Root Scheduled Resource Inspection Timer\n\
              Documentation=https://github.com/realmadede/Root\n\
              \n\
              [Timer]\n\
              OnCalendar={}\n\
-             Persistent=true\n\
+             Persistent={}\n\
              RandomizedDelaySec=15m\n\
              \n\
              [Install]\n\
              WantedBy=timers.target\n",
-            on_calendar
+            on_calendar, persistent_str
         ))
+    }
+
+    /// Validates unit file syntax and directives before installation.
+    pub fn validate_unit_content(content: &str, expected_section: &str) -> Result<()> {
+        if content.trim().is_empty() {
+            return Err(RootError::ScheduleError(
+                "Generated unit file content is empty".to_string(),
+            ));
+        }
+
+        if !content.contains("[Unit]") || !content.contains(expected_section) {
+            return Err(RootError::ScheduleError(format!(
+                "Generated unit file missing required [Unit] or {} section",
+                expected_section
+            )));
+        }
+
+        // Prohibit invalid user directives in user services
+        if content.contains("User=") || content.contains("User=%h") {
+            return Err(RootError::ScheduleError(
+                "User directive is illegal in systemd user service units".to_string(),
+            ));
+        }
+
+        Ok(())
     }
 }
 
@@ -116,44 +158,123 @@ impl LinuxScheduler {
         self.unit_dir().join("root-inspect.timer")
     }
 
-    /// Installs systemd user service and timer unit files with restrictive permissions.
-    pub fn install_units(&self, exec_path: &Path, interval: &ScheduleInterval) -> Result<()> {
+    /// Checks if a file exists and was not created by Root (collision protection).
+    fn check_collision(&self, path: &Path) -> Result<()> {
+        if !path.exists() {
+            return Ok(());
+        }
+
+        let content = fs::read_to_string(path).map_err(|e| RootError::Io {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
+
+        if !content.contains(ROOT_UNIT_MARKER) && !content.contains("realmadede/Root") {
+            return Err(RootError::ScheduleError(format!(
+                "Collision: existing unit file '{}' was not created by Root; refusing to overwrite unknown file",
+                path.display()
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Installs systemd user service and timer unit files with transactional rollback.
+    pub fn install_units_transactional(
+        &self,
+        exec_path: &Path,
+        interval: &ScheduleInterval,
+        catch_up: bool,
+        ac_power_only: bool,
+    ) -> Result<()> {
+        // 1. Validate executable path
+        let validated_exec = validate_executable(exec_path)?;
+
         let dir = self.unit_dir();
         fs::create_dir_all(&dir).map_err(|e| RootError::Io {
             path: dir.clone(),
             source: e,
         })?;
 
-        let service_content =
-            SystemdUnitGenerator::generate_service_unit(exec_path, &["schedule", "run"]);
-        let timer_content = SystemdUnitGenerator::generate_timer_unit(interval)?;
-
         let service_path = self.service_unit_path();
         let timer_path = self.timer_unit_path();
 
-        fs::write(&service_path, service_content).map_err(|e| RootError::Io {
-            path: service_path.clone(),
+        // 2. Reject collisions with unrelated files
+        self.check_collision(&service_path)?;
+        self.check_collision(&timer_path)?;
+
+        // 3. Generate unit contents
+        let service_content = SystemdUnitGenerator::generate_service_unit(
+            &validated_exec,
+            &["schedule", "run"],
+            ac_power_only,
+        );
+        let timer_content = SystemdUnitGenerator::generate_timer_unit(interval, catch_up)?;
+
+        // 4. Validate unit contents
+        SystemdUnitGenerator::validate_unit_content(&service_content, "[Service]")?;
+        SystemdUnitGenerator::validate_unit_content(&timer_content, "[Timer]")?;
+
+        // 5. Staged writes to temporary sibling files
+        let service_tmp = service_path.with_extension("tmp");
+        let timer_tmp = timer_path.with_extension("tmp");
+
+        fs::write(&service_tmp, service_content).map_err(|e| RootError::Io {
+            path: service_tmp.clone(),
             source: e,
         })?;
-        fs::set_permissions(&service_path, Permissions::from_mode(0o644)).map_err(|e| {
-            RootError::Io {
+        let _ = fs::set_permissions(&service_tmp, Permissions::from_mode(0o644));
+
+        fs::write(&timer_tmp, timer_content).map_err(|e| RootError::Io {
+            path: timer_tmp.clone(),
+            source: e,
+        })?;
+        let _ = fs::set_permissions(&timer_tmp, Permissions::from_mode(0o644));
+
+        // 6. Transactional swap with rollback on failure
+        if let Err(e) = fs::rename(&service_tmp, &service_path) {
+            let _ = fs::remove_file(&service_tmp);
+            let _ = fs::remove_file(&timer_tmp);
+            return Err(RootError::Io {
                 path: service_path,
                 source: e,
-            }
-        })?;
+            });
+        }
 
-        fs::write(&timer_path, timer_content).map_err(|e| RootError::Io {
-            path: timer_path.clone(),
-            source: e,
-        })?;
-        fs::set_permissions(&timer_path, Permissions::from_mode(0o644)).map_err(|e| {
-            RootError::Io {
+        if let Err(e) = fs::rename(&timer_tmp, &timer_path) {
+            // Rollback service file
+            let _ = fs::remove_file(&service_path);
+            let _ = fs::remove_file(&timer_tmp);
+            return Err(RootError::Io {
                 path: timer_path,
                 source: e,
+            });
+        }
+
+        // 7. Reload systemd daemon if not in simulated test mode
+        if self.custom_unit_dir.is_none() {
+            let reload = Command::new("systemctl")
+                .arg("--user")
+                .arg("daemon-reload")
+                .status();
+
+            if let Err(e) = reload {
+                // Rollback units
+                let _ = fs::remove_file(&service_path);
+                let _ = fs::remove_file(&timer_path);
+                return Err(RootError::ScheduleError(format!(
+                    "systemctl daemon-reload failed: {}",
+                    e
+                )));
             }
-        })?;
+        }
 
         Ok(())
+    }
+
+    /// Backwards-compatible install helper.
+    pub fn install_units(&self, exec_path: &Path, interval: &ScheduleInterval) -> Result<()> {
+        self.install_units_transactional(exec_path, interval, false, false)
     }
 
     /// Uninstalls systemd user unit files if present.
@@ -168,12 +289,18 @@ impl LinuxScheduler {
             let _ = fs::remove_file(&timer_path);
         }
 
+        if self.custom_unit_dir.is_none() {
+            let _ = Command::new("systemctl")
+                .arg("--user")
+                .arg("daemon-reload")
+                .status();
+        }
+
         Ok(())
     }
 
     /// Checks whether the systemd user manager is active and reachable.
     pub fn is_systemd_user_available(&self) -> bool {
-        // If pointing to a mock/custom unit dir, simulate based on presence
         if self.custom_unit_dir.is_some() {
             return true;
         }
@@ -291,7 +418,6 @@ impl LinuxScheduler {
             return None;
         }
 
-        // Output format: NEXT LEFT LAST PASSED UNIT ACTIVATES
         let parts: Vec<&str> = trimmed.split_whitespace().collect();
         if parts.len() >= 4 {
             Some(format!("{} {}", parts[0], parts[1]))
@@ -299,22 +425,129 @@ impl LinuxScheduler {
             Some(trimmed.to_string())
         }
     }
+
+    /// Checks whether the system is currently connected to AC power.
+    ///
+    /// Evaluates `/sys/class/power_supply/`. If power supply telemetry is absent
+    /// or inconclusive (e.g. containers, VMs), defaults to true (assumes AC power).
+    pub fn is_ac_power_connected() -> bool {
+        let ps_dir = Path::new("/sys/class/power_supply");
+        if !ps_dir.exists() {
+            return true;
+        }
+
+        let entries = match fs::read_dir(ps_dir) {
+            Ok(e) => e,
+            Err(_) => return true,
+        };
+
+        let mut has_ac = false;
+        let mut on_ac = false;
+        let mut battery_discharging = false;
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let type_path = path.join("type");
+            if let Ok(supply_type) = fs::read_to_string(&type_path) {
+                let trimmed_type = supply_type.trim();
+                if trimmed_type == "Mains" || trimmed_type == "AC" {
+                    has_ac = true;
+                    if let Ok(online) = fs::read_to_string(path.join("online")) {
+                        if online.trim() == "1" {
+                            on_ac = true;
+                        }
+                    }
+                } else if trimmed_type == "Battery" {
+                    if let Ok(status) = fs::read_to_string(path.join("status")) {
+                        if status.trim().eq_ignore_ascii_case("discharging") {
+                            battery_discharging = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if has_ac {
+            on_ac
+        } else {
+            !battery_discharging
+        }
+    }
+
+    /// Checks whether host memory pressure is above a specified percentage threshold.
+    ///
+    /// Inspects `/proc/pressure/memory` (PSI) 10-second stall percentage.
+    /// Also verifies `/proc/meminfo` available memory is above 200 MiB.
+    pub fn is_memory_pressure_high(stall_threshold_pct: f64) -> bool {
+        // 1. Check PSI memory pressure
+        if let Ok(psi) = fs::read_to_string("/proc/pressure/memory") {
+            for line in psi.lines() {
+                if line.starts_with("some") {
+                    for part in line.split_whitespace() {
+                        if let Some(val) = part.strip_prefix("avg10=") {
+                            if let Ok(v) = val.parse::<f64>() {
+                                if v > stall_threshold_pct {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Check MemAvailable
+        if let Ok(meminfo) = fs::read_to_string("/proc/meminfo") {
+            for line in meminfo.lines() {
+                if line.starts_with("MemAvailable:") {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let Ok(kb) = parts[1].parse::<u64>() {
+                            // If available memory is less than 200 MiB (204,800 kB), pressure is critical
+                            if kb < 204_800 {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
 }
 
 /// Linux desktop notification dispatcher utilizing FreeDesktop mechanisms (`notify-send` or D-Bus).
 pub struct DesktopNotifier;
 
 impl DesktopNotifier {
-    /// Dispatches a notification to the local desktop notification service.
+    /// Computes a privacy-safe cryptographic fingerprint of aggregate inspection findings.
     ///
-    /// Handled gracefully: if the desktop notification daemon is not available,
-    /// returns `Ok(false)` rather than failing the scan.
+    /// Uses only summary counters and status; never incorporates file paths or names.
+    pub fn compute_fingerprint(
+        status: ScheduleRunStatus,
+        total_inspected: u64,
+        total_findings: usize,
+    ) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let payload = format!(
+            "{}:{}:{}",
+            status.display_badge(),
+            total_inspected,
+            total_findings
+        );
+        let mut hasher = DefaultHasher::new();
+        payload.hash(&mut hasher);
+        format!("{:016x}", hasher.finish())
+    }
+
+    /// Dispatches a notification to the local desktop notification service with deduplication.
     pub fn dispatch(title: &str, body: &str, urgency: &str) -> Result<bool> {
-        // 1. Sanitize text inputs
         let clean_title = title.replace('\n', " ").replace('\r', "");
         let clean_body = body.replace('\r', "");
 
-        // 2. Try notify-send command
         let res = Command::new("notify-send")
             .arg("-a")
             .arg("Root")
@@ -326,10 +559,7 @@ impl DesktopNotifier {
 
         match res {
             Ok(status) if status.success() => Ok(true),
-            _ => {
-                // Try dbus-send fallback if notify-send failed or missing
-                Self::dispatch_dbus(&clean_title, &clean_body)
-            }
+            _ => Self::dispatch_dbus(&clean_title, &clean_body),
         }
     }
 
@@ -352,7 +582,7 @@ impl DesktopNotifier {
 
         match res {
             Ok(status) if status.success() => Ok(true),
-            _ => Ok(false), // Desktop notification daemon unavailable; non-fatal
+            _ => Ok(false),
         }
     }
 }

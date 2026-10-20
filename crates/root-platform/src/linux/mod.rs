@@ -11,4 +11,4 @@ pub use filesystem::{
     TraversalOptions, TraversalOutcome,
 };
 pub use process::LinuxProcess;
-pub use scheduler::{DesktopNotifier, LinuxScheduler, SystemdUnitGenerator};
+pub use scheduler::{DesktopNotifier, LinuxScheduler, SystemdUnitGenerator, ROOT_UNIT_MARKER};

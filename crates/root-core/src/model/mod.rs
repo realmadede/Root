@@ -20,5 +20,6 @@ pub use resource::{
     ResourceOwnership,
 };
 pub use schedule::{
-    ScheduleConfig, ScheduleHistoryEntry, ScheduleInterval, ScheduleRunStatus, ScheduleStatus,
+    validate_executable, InspectionBudget, InspectionProfile, ScheduleConfig, ScheduleHistoryEntry,
+    ScheduleInterval, ScheduleRunStatus, ScheduleStatus,
 };

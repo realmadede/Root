@@ -179,10 +179,10 @@ cargo test --workspace
 
 ### Test Suite Execution Summary:
 - **`root-cli` integration tests (`cli_tests.rs`)**: 20 passed; 0 failed
-- **`root-cli` schedule tests (`schedule_tests.rs`)**: 20 passed; 0 failed
+- **`root-cli` schedule tests (`schedule_tests.rs`)**: 30 passed; 0 failed
   1. `test_01_disabled_by_default_scheduling`: Verifies schedule is disabled by default.
   2. `test_02_explicit_enable_authorization`: Verifies explicit targets required for enable.
-  3. `test_03_valid_daily_schedule`: Verifies daily OnCalendar mapping.
+  3. `test_03_valid_daily_and_hourly_schedule`: Verifies daily and hourly OnCalendar mapping and catch-up toggle.
   4. `test_04_valid_weekly_schedule`: Verifies weekly OnCalendar mapping.
   5. `test_05_invalid_schedule_rejection`: Verifies rejection of invalid interval specifications.
   6. `test_06_unsafe_target_rejection`: Verifies rejection of `/`, `/proc`, `/sys`, `/usr`, `/etc`.
@@ -191,15 +191,25 @@ cargo test --workspace
   9. `test_09_no_elevated_privilege_requirement`: Verifies unprivileged user unit paths.
   10. `test_10_no_overlapping_executions`: Verifies non-blocking `flock` exclusivity.
   11. `test_11_unsupported_systemd_environment`: Verifies handling when systemd timer is absent.
-  12. `test_12_notification_privacy`: Verifies notifications omit secrets and tokens.
+  12. `test_12_notification_privacy`: Verifies notifications omit secrets, paths, and tokens.
   13. `test_13_notification_service_absence`: Verifies non-fatal behavior without notification daemon.
   14. `test_14_history_retention_and_pruning`: Verifies pruning maintains max 50 records.
   15. `test_15_history_permission_enforcement`: Verifies `0o600` file permissions on history.
   16. `test_16_malformed_state_recovery`: Verifies recovery and backup of corrupt state files.
-  17. `test_17_scan_timeout_behavior`: Verifies traversal cutoff on execution timeout.
+  17. `test_17_scan_timeout_and_budget_behavior`: Verifies traversal cutoff on entry budget limits.
   18. `test_18_deleted_target_handling`: Verifies graceful skipping of missing scan paths.
   19. `test_19_disable_and_removal_behavior`: Verifies unit and configuration cleanup.
   20. `test_20_guardian_rejection_of_scheduled_mutations`: Verifies Guardian rejects mutations.
+  21. `test_21_unsupported_systemd_sandboxing_directives`: Verifies rejection of illegal `User=` in user units.
+  22. `test_22_executable_relocation_and_validation`: Verifies executable validation and interpreter refusal.
+  23. `test_23_battery_aware_scheduling`: Verifies `ConditionACPower=true` generation on `--ac-only`.
+  24. `test_24_high_memory_pressure_deferral`: Verifies memory pressure threshold preflight evaluation.
+  25. `test_25_existing_unit_file_collisions`: Verifies rejection of collisions with non-Root unit files.
+  26. `test_26_partial_installation_rollback`: Verifies transactional rollback on unit generation failure.
+  27. `test_27_notification_deduplication`: Verifies cryptographic fingerprint deduplication.
+  28. `test_28_catch_up_behavior`: Verifies `Persistent=false` by default and `Persistent=true` on opt-in.
+  29. `test_29_profile_scope_restrictions`: Verifies scope budgets across Lightweight, Standard, and Comprehensive.
+  30. `test_30_incomplete_inspection_reporting`: Verifies partial scans are strictly reported as `Incomplete`.
 - **`root-guardian` transaction tests (`guardian_transaction_tests.rs`)**: 16 passed; 0 failed
 - **`root-guardian` follow-up tests (`guardian_security_followup_tests.rs`)**: 6 passed; 0 failed
 - **`root-guardian` unit tests**: 7 passed; 0 failed
@@ -208,7 +218,7 @@ cargo test --workspace
 - **`root-core` security tests (`security_tests.rs`)**: 8 passed; 0 failed
 - **`root-core` unit tests**: 1 passed; 0 failed
 
-**Total Passed Tests**: **97 passed; 0 failed; 0 ignored** (100% pass rate).
+**Total Passed Tests**: **107 passed; 0 failed; 0 ignored** (100% pass rate).
 
 ### Repository Invariant Assurance:
 - `cargo fmt --check`: **PASSED** (0 diffs)
@@ -223,7 +233,7 @@ cargo test --workspace
 
 ## 12. Performance Observations
 
-- **Workspace Test Execution Time**: All 97 tests executed in **0.61 seconds** total.
+- **Workspace Test Execution Time**: All 107 tests executed in **0.65 seconds** total.
 - **Memory Overhead**: 0 bytes resident memory during idle periods (transient process model).
 - **CPU Scheduling**: Scheduled inspections run at POSIX niceness 19; CPU consumption yields immediately to interactive processes.
 - **Block I/O Priority**: Configured to `IOSchedulingClass=idle`, eliminating disk contention for developer compilation and interactive tasks.

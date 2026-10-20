@@ -97,13 +97,19 @@ Displays the current configuration and operational status of Mode B scheduled in
 - Summary of the most recent scheduled execution (timestamp, status, examined resource count).
 - Safety policy invariant: explicit confirmation of read-only non-destructive operation.
 
-### `root schedule enable [--interval <daily|weekly|custom>] [--target <path>...] [--notify] [--non-interactive]`
+### `root schedule enable [--interval <hourly|daily|weekly|custom>] [--profile <lightweight|standard|comprehensive>] [--targets <path>...] [--notify] [--catch-up] [--ac-only] [--max-duration <secs>] [--max-entries <N>] [--max-depth <N>] [--exec-path <path>] [--non-interactive]`
 Enables periodic background inspections using systemd user timers:
-- **Interactive Preview**: Presents a confirmation summary displaying frequency interval, notification preference, target directories, traversal bounds, and watchdog timeouts. Requires explicit confirmation unless `--non-interactive` is passed.
-- **Interval Selection**: `--interval daily` (default), `--interval weekly`, or `--interval "<calendar-spec>"`.
-- **Target Directories**: One or more `--target <path>` arguments specifying approved scan roots. Rejects `/`, pseudo-filesystems, system directories, and control characters.
-- **Desktop Notifications**: `--notify` enables completion notifications via `notify-send` / FreeDesktop D-Bus.
-- **Unit Installation**: Installs security-hardened `root-inspect.service` and `root-inspect.timer` units into `~/.config/systemd/user/` and enables the timer via `systemctl --user enable --now root-inspect.timer`.
+- **Interactive Preview**: Presents a confirmation summary displaying frequency interval, profile limits, notification preference, target directories, traversal bounds, and watchdog timeouts. Requires explicit confirmation unless `--non-interactive` is passed.
+- **Interval Selection**: `--interval hourly`, `--interval daily` (default), `--interval weekly`, or `--interval "<calendar-spec>"`.
+- **Inspection Profiles**:
+  - `lightweight`: Max depth 4, max entries 10,000, 15s timeout, 256 MiB memory limit.
+  - `standard` (default): Max depth 16, max entries 50,000, 60s timeout, 512 MiB memory limit.
+  - `comprehensive`: Max depth 32, max entries 150,000, 120s timeout, 1,024 MiB memory limit.
+- **Target Directories**: One or more approved scan roots via `--targets <path>`. Rejects `/`, pseudo-filesystems (`/proc`, `/sys`, `/dev`), system directories (`/etc`, `/usr`, `/var`), and control characters. Targets are never automatically expanded or guessed.
+- **Desktop Notifications**: `--notify` enables completion notifications via `notify-send` / FreeDesktop D-Bus with privacy-safe cryptographic fingerprint deduplication.
+- **Catch-Up Control**: `--catch-up` enables execution catch-up after workstation suspend or boot. Disabled by default (`Persistent=false`) to prevent unexpected load bursts upon user login.
+- **Battery-Aware Scheduling**: `--ac-only` restricts scheduled inspections to AC power, deferring runs while discharging battery.
+- **Unit Installation**: Installs security-hardened `root-inspect.service` and `root-inspect.timer` units into `~/.config/systemd/user/` with collision protection and transactional rollback. Enables the timer via `systemctl --user enable --now root-inspect.timer`.
 
 ### `root schedule disable`
 Disables periodic background inspections:
