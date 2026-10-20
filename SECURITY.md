@@ -1,0 +1,48 @@
+# Security Policy & Security Model
+
+## 1. Security Philosophy & Least Privilege Guarantee
+
+Root is designed from the ground up as a **zero-elevated-privilege utility**.
+
+### Fundamental Guarantees:
+- **No `root` or `sudo` Required**: Root executes exclusively under the privileges of the calling unprivileged user. It contains no `setuid` binaries, makes no calls to `pkexec` or `sudo`, and requests no elevated capabilities (`CAP_SYS_ADMIN`).
+- **No Private Data Access**: Root does not parse, store, or transmit the textual contents of user documents, source code, private conversational histories (`transcript.jsonl`, `sessions/*.json`), or credentials (`oauth_creds.json`, `.key` files).
+- **No Remote Telemetry or Cloud Dependencies**: Root makes zero network calls. It includes no analytics, tracking, or cloud dependencies.
+- **Fail-Safe Invariants**: Any resource, path, or process that fails verification or cannot be definitively identified is automatically classified as `STRICTLY_PROTECTED` and left completely untouched.
+
+---
+
+## 2. Threat Boundaries & Security Invariants
+
+| Domain | Invariant Enforced by Root |
+|---|---|
+| **Filesystem Traversal** | Uses `lstat` and `openat2` with `RESOLVE_BENEATH` and `RESOLVE_NO_SYMLINKS`. Traversal never escapes designated target roots or follows untrusted symlinks. |
+| **Mount Points** | Validates filesystem device IDs (`st_dev`). Traversal immediately halts at mount boundaries, preventing escapes onto foreign filesystems or pseudo-filesystems. |
+| **Hard Links** | Detects multi-linked inodes (`st_nlink > 1`). Root never modifies or corrupts shared hard-link graphs (such as pnpm stores). |
+| **Process Signaling** | Signals are dispatched exclusively via Linux 5.4+ `pidfd_send_signal`, eliminating PID reuse race conditions. |
+| **Code Execution** | Root never executes scripts, package managers, or compilers located in scanned directories (no `npm run clean`, no `cargo clean`). |
+| **Reversibility** | Deletions are executed as atomic movements into a secure local quarantine (`~/.local/state/root/quarantine/`, permissions `0700`) with cryptographic rollback journaling. |
+
+For the full architectural threat model, see [docs/threat-model.md](docs/threat-model.md).
+
+---
+
+## 3. Vulnerability Reporting & Disclosure
+
+We welcome responsible security reports from security researchers, systems programmers, and developers.
+
+### Reporting Procedure
+If you discover a security vulnerability (such as a path traversal flaw, race condition, symlink attack, or privilege issue):
+1. **Do not create a public GitHub issue.**
+2. Send a detailed report via encrypted email to:
+   **security@bagomwa.com** (or to project lead Raphael Madede at `bagomwaraphael@gmail.com`).
+3. Include:
+   - Detailed description of the vulnerability.
+   - Proof-of-concept (PoC) or reproduction steps.
+   - Affected platform and kernel version.
+   - Any proposed patch or mitigation.
+
+### Disclosure Timeline
+- **Acknowledgement**: Within 48 hours of receipt.
+- **Triage & Assessment**: Within 7 business days.
+- **Fix & Advisory**: We will coordinate a patch and public advisory following responsible disclosure principles, typically within 30 to 90 days depending on complexity.
