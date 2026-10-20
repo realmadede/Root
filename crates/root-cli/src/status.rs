@@ -81,6 +81,15 @@ fn render_status_terminal(report: &StatusReport) {
     println!("  Kernel Release        : {}", report.kernel_release);
     println!("  Invoking UID          : {}", report.invoking_uid);
     println!("  Root Version          : v{}", report.root_version);
+    let sched_config = crate::schedule::load_schedule_config();
+    println!(
+        "  Scheduled Mode (B)    : {}",
+        if sched_config.enabled {
+            Style::green("Enabled")
+        } else {
+            Style::dim("Disabled (by default)")
+        }
+    );
     println!(
         "  Safety Policy         : {}",
         Style::green(&report.safety_mode)

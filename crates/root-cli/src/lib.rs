@@ -10,10 +10,11 @@ pub mod inspect;
 pub mod interactive;
 pub mod report;
 pub mod scan;
+pub mod schedule;
 pub mod status;
 pub mod terminal;
 
-pub use args::{Cli, Commands, InspectCommands};
+pub use args::{Cli, Commands, InspectCommands, ScheduleCommands};
 
 /// Executes Root CLI commands using the process command-line arguments.
 pub fn run() -> Result<()> {
@@ -107,6 +108,34 @@ pub fn dispatch_command(command: Commands) -> Result<()> {
         Commands::Report { path, json } => {
             report::run_report(path, json)?;
         }
+        Commands::Schedule { command } => match command {
+            ScheduleCommands::Status { json } => {
+                schedule::run_schedule_status(json)?;
+            }
+            ScheduleCommands::Enable {
+                interval,
+                targets,
+                notify,
+                non_interactive,
+            } => {
+                schedule::run_schedule_enable(interval, targets, notify, non_interactive)?;
+            }
+            ScheduleCommands::Disable => {
+                schedule::run_schedule_disable()?;
+            }
+            ScheduleCommands::List => {
+                schedule::run_schedule_list()?;
+            }
+            ScheduleCommands::Run { dry_run, notify } => {
+                schedule::run_schedule_run(dry_run, notify)?;
+            }
+            ScheduleCommands::History { limit, json } => {
+                schedule::run_schedule_history(limit, json)?;
+            }
+            ScheduleCommands::Remove => {
+                schedule::run_schedule_remove()?;
+            }
+        },
     }
 
     Ok(())

@@ -119,13 +119,20 @@ gantt
 
 ---
 
-### Phase 06: Scheduled Inspections (Mode B)
-- **Primary Goal**: Enable non-intrusive periodic background inspections.
-- **Key Tasks**:
-  - Package systemd user service (`root-inspect.service`) and timer (`root-inspect.timer`).
-  - Implement desktop notification dispatcher via D-Bus (`org.freedesktop.Notifications`).
-  - CLI management commands (`root schedule enable`, `root schedule disable`, `root schedule status`).
-- **Safety Gate**: Scheduled mode is strictly read-only; notifications only; zero automatic file mutations.
+### Phase 06: Scheduled Inspections (Mode B) — COMPLETED
+- **Status**: COMPLETE
+- **Primary Goal**: Enable non-intrusive periodic background inspections without running permanent daemons.
+- **Key Accomplishments**:
+  - Implemented core schedule domain models (`ScheduleConfig`, `ScheduleInterval`, `ScheduleRunStatus`, `ScheduleHistoryEntry`, `ScheduleStatus`) with validation rejecting unsafe targets and injection vectors.
+  - Implemented Linux systemd user unit generator (`SystemdUnitGenerator`) producing hardened `root-inspect.service` (`NoNewPrivileges=true`, `Nice=19`, `IOSchedulingClass=idle`, `TimeoutSec=120`, direct binary invocation without shell wrappers) and `root-inspect.timer` (`Persistent=true`, `RandomizedDelaySec=15m`).
+  - Implemented `LinuxScheduler` platform engine managing user units (`0o644`), daemon reload, timer enable/disable, active state check, and next trigger querying.
+  - Implemented privacy-preserving desktop notification dispatcher (`DesktopNotifier`) via FreeDesktop `notify-send` and D-Bus with graceful non-fatal fallback.
+  - Implemented concurrency protection using non-blocking POSIX file locking (`flock`) on `$XDG_STATE_HOME/root/schedule.lock`, cleanly skipping overlapping runs.
+  - Implemented comprehensive `root schedule` CLI command family (`status`, `enable`, `disable`, `list`, `run`, `history`, `remove`) with pre-activation confirmation preview.
+  - Implemented bounded history persistence in `$XDG_STATE_HOME/root/schedule_history.json` with strict `0o600` permissions and automated pruning to 50 records.
+  - Updated `root status` and `root doctor` with systemd user unit and scheduler health auditing.
+  - Added dedicated 20-scenario automated integration test suite (`tests/schedule_tests.rs`) utilizing isolated mock unit directories; achieved 97 total passing tests across the workspace.
+- **Safety Gate**: Passed all 97 workspace tests; scheduled mode is strictly read-only; Guardian unconditionally rejects all scheduled mutations; zero permanent background daemons.
 
 ---
 

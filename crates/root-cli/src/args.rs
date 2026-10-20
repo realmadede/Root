@@ -103,6 +103,72 @@ pub enum Commands {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
+
+    /// Manage Mode B scheduled inspections and systemd user timers
+    Schedule {
+        #[command(subcommand)]
+        command: ScheduleCommands,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ScheduleCommands {
+    /// Show current scheduling status, active frequency, and next trigger
+    Status {
+        /// Output status as structured JSON
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+
+    /// Enable periodic scheduled inspection
+    Enable {
+        /// Recurrence interval: daily, weekly, or valid OnCalendar expression
+        #[arg(short, long)]
+        interval: Option<String>,
+
+        /// Comma-separated list of target directories to scan
+        #[arg(short, long, value_delimiter = ',')]
+        targets: Vec<PathBuf>,
+
+        /// Enable desktop notifications upon scan completion
+        #[arg(long, default_value_t = false)]
+        notify: bool,
+
+        /// Bypass interactive confirmation prompt
+        #[arg(long, default_value_t = false)]
+        non_interactive: bool,
+    },
+
+    /// Disable scheduled inspection timer and stop future executions
+    Disable,
+
+    /// List configured inspection profiles and targets
+    List,
+
+    /// Execute scheduled inspection pass immediately (read-only)
+    Run {
+        /// Dry-run simulation (mandated in Phase 06)
+        #[arg(long, default_value_t = true)]
+        dry_run: bool,
+
+        /// Dispatch desktop notification upon completion
+        #[arg(long, default_value_t = false)]
+        notify: bool,
+    },
+
+    /// View historical execution logs for scheduled runs
+    History {
+        /// Maximum number of records to display
+        #[arg(short, long)]
+        limit: Option<usize>,
+
+        /// Output history as structured JSON
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+
+    /// Remove all Root systemd user units and delete schedule configuration
+    Remove,
 }
 
 #[derive(Subcommand, Debug, Clone)]

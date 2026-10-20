@@ -56,8 +56,10 @@ Root is organized as a unified Cargo workspace. In Phase 00, the architecture is
 ```
 crates/
 ├── root-core/          # Pure domain logic, policy rules, classification types
+│   └── src/model/schedule.rs # ScheduleConfig, ScheduleInterval, ScheduleStatus models
 ├── root-platform/      # Cross-platform traits (ProcessProvider, FilesystemWatcher, etc.)
 │   └── src/linux/      # Linux-specific implementation (/proc, cgroups v2, pidfd)
+│       └── scheduler.rs # systemd user unit generator, LinuxScheduler, DesktopNotifier
 ├── root-guardian/      # Security engine, path canonicalization, symlink jail enforcement
 ├── root-audit/         # Rollback journaling, SHA256 integrity, transaction logs
 ├── root-storage/       # Filesystem scanner, hardlink deduplication, directory walk
@@ -66,13 +68,14 @@ crates/
 ├── root-workspace/     # Git repository state, branch checking, project detectors
 ├── root-cli/           # Terminal UI, interactive prompts, formatted output
 │   ├── args.rs         # Clap argument parsing, subcommands, and flags
-│   ├── doctor.rs       # Platform audit and kernel interface diagnostics
-│   ├── status.rs       # Concise system overview, memory pressure, and scan history
+│   ├── doctor.rs       # Platform audit, kernel interface, and systemd scheduler diagnostics
+│   ├── status.rs       # Concise system overview, memory pressure, scan history, and schedule status
 │   ├── scan.rs         # Directory artifact scanning with dry-run protection
 │   ├── discover.rs     # AI coding agent and toolchain footprint discovery
 │   ├── inspect.rs      # Subsystem inspection (memory, proc, storage statvfs, transaction journals)
 │   ├── explain.rs      # Explainability engine detailing provenance, uncertainty, and Guardian decisions
 │   ├── report.rs       # Consolidated diagnostic and audit reporting
+│   ├── schedule.rs     # Mode B systemd scheduling management, run orchestration, and notification
 │   ├── interactive.rs  # Read-only interactive terminal navigation
 │   ├── terminal.rs     # NO_COLOR adherence, POSIX terminal width detection, tabular formatting
 │   └── history.rs      # XDG-compliant persistent scan history records
@@ -210,3 +213,26 @@ stateDiagram-v2
 - **Cross-Filesystem Safety**: Cross-device moves (`EXDEV`) are detected and rejected prior to mutation.
 - **Conflict-Aware Restoration**: Restoring a resource never overwrites an existing file at the original path. Destination collisions halt restoration, preserving the quarantined copy intact.
 - **Self-Contained Integrity Verification**: File integrity is verified using a pure-Rust SHA-256 implementation with zero third-party crate dependencies.
+
+---
+
+## 8. Scheduled Inspections & systemd User Timers (Phase 06, Mode B)
+
+Phase 06 introduces Mode B—optional, scheduled periodic inspections implemented cleanly without persistent background daemons:
+
+```mermaid
+flowchart LR
+    Timer["systemd User Timer<br>(root-inspect.timer)"] -->|OnCalendar| Service["systemd User Service<br>(root-inspect.service)"]
+    Service -->|ExecStart oneshot| CLI["root schedule run"]
+    CLI -->|flock| LockFile["schedule.lock<br>(Concurrency Guard)"]
+    CLI -->|Read-Only Walk| Discovery["Discovery Engine<br>(root-core)"]
+    CLI -->|Store Run (0o600)| History["schedule_history.json<br>(Pruned to 50 records)"]
+    CLI -->|Summary Only| Notify["Desktop Notification<br>(notify-send / D-Bus)"]
+```
+
+### Architectural Guarantees:
+- **Zero Background Daemons**: Execution relies entirely on native Linux user timers (`systemd --user`). Between scheduled triggers, zero Root processes reside in memory.
+- **Strictly Read-Only Guarantee**: Scheduled runs execute read-only traversals, lifecycle categorizations, and storage accounting. Guardian policy unconditionally blocks all mutations (`Quarantine`, `Prune`, `Restore`).
+- **Concurrency Serialization**: Non-blocking `flock` on `$XDG_STATE_HOME/root/schedule.lock` ensures simultaneous manual scans and scheduled runs do not collide or degrade storage performance.
+- **Privacy-Preserving Notifications**: FreeDesktop notifications emit aggregate counts only, never leaking filenames, project paths, usernames, or sensitive metadata.
+- **Bounded State Retention**: Schedule run history stored at `$XDG_STATE_HOME/root/schedule_history.json` with mode `0o600` is strictly capped at 50 records via automatic chronological pruning.

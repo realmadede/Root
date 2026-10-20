@@ -83,7 +83,7 @@ pub fn run_doctor() -> Result<()> {
     }
 
     println!("\nActive Governance Phase:");
-    println!("  Phase Status     : Phase 05 (Professional Command Line Interface & Resource Inspection Experience)");
+    println!("  Phase Status     : Phase 06 (Scheduled Inspections, systemd User Timers & Desktop Notifications)");
     println!("  Safety Policy    : Production Read-Only (Quarantine & Rollback Isolated to Synthetic Fixtures)");
     println!("============================================================");
 

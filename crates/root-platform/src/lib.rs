@@ -5,8 +5,9 @@ pub mod mock;
 pub mod traits;
 
 pub use linux::{
-    DiscoveredEntry, LinuxAccountant, LinuxEnvironment, LinuxFilesystem, LinuxProcess, SkipReason,
-    TraversalEvent, TraversalMetrics, TraversalOptions, TraversalOutcome,
+    DesktopNotifier, DiscoveredEntry, LinuxAccountant, LinuxEnvironment, LinuxFilesystem,
+    LinuxProcess, LinuxScheduler, SkipReason, SystemdUnitGenerator, TraversalEvent,
+    TraversalMetrics, TraversalOptions, TraversalOutcome,
 };
 pub use mock::MockPlatform;
 pub use traits::{

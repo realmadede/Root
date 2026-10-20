@@ -14,9 +14,10 @@ Root allows developers to audit resources accumulated during agentic coding work
 Prints summary usage information and crate version (`0.1.0`).
 
 ### `root doctor`
-Performs an audit of host platform capabilities, kernel interfaces, memory metrics, and XDG directory configurations.
+Performs an audit of host platform capabilities, kernel interfaces, memory metrics, XDG directory configurations, and systemd user scheduler health.
 
 - **Kernel Interfaces Inspected**: `/proc`, `/proc/meminfo`, `/proc/pressure/memory`, `/proc/[pid]/smaps_rollup`, `/sys/fs/cgroup` (cgroups v2), `pidfd_open`, `openat2`, `statx`.
+- **Scheduler & Notification Audited**: User systemd availability (`systemctl --user`), user unit directory status (`~/.config/systemd/user`), desktop notification dispatchers (`notify-send`, `dbus-send`), and schedule history storage permissions.
 - **Privilege Guarantee**: Unprivileged user-space operation (UID/GID reported; zero sudo/root requirement).
 
 ### `root status [--json]`
@@ -26,6 +27,7 @@ Emits a concise system overview:
 - **Physical RAM & Swap**: Total, available, free, and swap usage.
 - **PSI Pressure Stalls**: Memory stall percentages across 10s, 60s, and full thrashing windows.
 - **Supported Targets**: Complete enumeration of all 12 supported agent and tool categories.
+- **Scheduled Inspection State (Mode B)**: Reports current schedule status (enabled/disabled), calendar interval, target count, next trigger time from systemd timer, and last scheduled run summary.
 - **Last Completed Scan**: Reads persistent scan summary from `$XDG_STATE_HOME/root/last_scan.json`. If no scan history exists, explicitly outputs: `No previous scan available`.
 - **Safety Policy**: Production Read-Only status.
 
@@ -84,6 +86,53 @@ Explains why a resource or rule was classified and how Guardian policies evaluat
 
 ### `root report [--path <path>] [--json]`
 Generates a comprehensive audit report combining host identity, kernel capabilities, memory metrics, filesystem capacity, agent/tool discovery footprint, and architectural safety guarantees.
+
+### `root schedule status [--json]`
+Displays the current configuration and operational status of Mode B scheduled inspections:
+- Schedule enabled state (`[ACTIVE]` or `[DISABLED by default]`).
+- Configured calendar interval badge (`[DAILY]`, `[WEEKLY]`, or custom spec).
+- systemd user manager accessibility and timer unit active state.
+- Next scheduled timer trigger time (queried via `systemctl --user list-timers`).
+- List of configured scan target directories with existence status.
+- Summary of the most recent scheduled execution (timestamp, status, examined resource count).
+- Safety policy invariant: explicit confirmation of read-only non-destructive operation.
+
+### `root schedule enable [--interval <daily|weekly|custom>] [--target <path>...] [--notify] [--non-interactive]`
+Enables periodic background inspections using systemd user timers:
+- **Interactive Preview**: Presents a confirmation summary displaying frequency interval, notification preference, target directories, traversal bounds, and watchdog timeouts. Requires explicit confirmation unless `--non-interactive` is passed.
+- **Interval Selection**: `--interval daily` (default), `--interval weekly`, or `--interval "<calendar-spec>"`.
+- **Target Directories**: One or more `--target <path>` arguments specifying approved scan roots. Rejects `/`, pseudo-filesystems, system directories, and control characters.
+- **Desktop Notifications**: `--notify` enables completion notifications via `notify-send` / FreeDesktop D-Bus.
+- **Unit Installation**: Installs security-hardened `root-inspect.service` and `root-inspect.timer` units into `~/.config/systemd/user/` and enables the timer via `systemctl --user enable --now root-inspect.timer`.
+
+### `root schedule disable`
+Disables periodic background inspections:
+- Stops and disables `root-inspect.timer` via `systemctl --user disable --now root-inspect.timer`.
+- Updates configuration to `enabled: false`.
+- Preserves configured target paths, intervals, and historical execution records for future reactivation.
+
+### `root schedule list [--json]`
+Lists all configured scheduled profiles, interval settings, desktop notification preferences, and approved scan target directories.
+
+### `root schedule run [--notify] [--non-interactive]`
+Executes a single scheduled inspection pass (normally invoked by systemd user timer `root-inspect.service`):
+- **Concurrency Guard**: Acquires exclusive non-blocking file lock on `$XDG_STATE_HOME/root/schedule.lock` via `flock`. Skips execution gracefully if another scan is active.
+- **Strictly Read-Only**: Traverses configured targets, discovers agent artifacts, assesses lifecycle states, and queries memory distribution. Zero file mutations or process signaling.
+- **Resilient Target Handling**: Safely detects and skips targets that have been deleted or unmounted without failing the overall run.
+- **History Tracking**: Appends an execution summary entry to `$XDG_STATE_HOME/root/schedule_history.json` (mode `0o600`), automatically pruning older entries to maintain a maximum 50-record retention limit.
+- **Notification Dispatch**: If notifications are enabled, dispatches an aggregate summary to the desktop environment via `notify-send` or D-Bus.
+
+### `root schedule history [--limit <N>] [--json]`
+Displays chronological history of scheduled inspection runs:
+- Lists execution timestamp, duration, status badge (`[COMPLETED]`, `[INCOMPLETE]`, `[FAILED]`), examined resource count, and targets scanned.
+- Supports filtering output to the most recent `N` entries (default: 10).
+
+### `root schedule remove`
+Completely removes Mode B scheduled units and configuration:
+- Disables and removes `root-inspect.timer` and `root-inspect.service` from `~/.config/systemd/user/`.
+- Executes `systemctl --user daemon-reload`.
+- Deletes the schedule configuration file `$XDG_CONFIG_HOME/root/schedule.json`.
+- Retains execution history for auditing purposes unless manually cleared.
 
 ---
 
