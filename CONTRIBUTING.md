@@ -6,12 +6,11 @@ Root is built with an uncompromising commitment to system security, user privacy
 
 ---
 
-## 1. Governance & Agent Development Rules
+## 1. Governance & Development Standards
 
-All human contributors and AI coding assistants must strictly read and comply with:
-1. [AGENTS.md](AGENTS.md): Mandatory operating invariants and constraints.
-2. [SECURITY.md](SECURITY.md): Threat boundaries and vulnerability policies.
-3. [docs/roadmap.md](docs/roadmap.md): The phase-based implementation plan.
+All contributors must strictly read and comply with:
+1. [SECURITY.md](SECURITY.md): Threat boundaries and vulnerability policies.
+2. [docs/roadmap.md](docs/roadmap.md): The phase-based implementation plan.
 
 ### Core Non-Negotiables:
 - **Phase Gating**: Never implement code outside the currently approved roadmap phase.

@@ -4,3 +4,6 @@ target/
 *.bak
 *~
 .DS_Store
+
+# Local development instruction files
+AGENTS.md

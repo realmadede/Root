@@ -3,38 +3,38 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Kali%20Linux%20Rolling%20%7C%20GNOME%20%7C%20Wayland-red.svg)](docs/platform-abstraction.md)
 [![Rust: 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](ARCHITECTURE.md)
-[![Status: Phase 00 Foundation](https://img.shields.io/badge/Status-Phase%2000%20Foundation-emerald.svg)](docs/phase-00-report.md)
+[![Status: Phase 01 Complete](https://img.shields.io/badge/Status-Phase%2001%20Complete-emerald.svg)](docs/phase-01-report.md)
 
 **Root** is a deterministic, lightweight, security-first Linux system utility engineered to help developers understand, audit, and safely recover system resources accumulated through agentic and conversational coding workflows.
 
-Unlike traditional cache cleaners or system sweepers, Root operates without AI runtimes, requires no privileged `root` access, respects Linux kernel virtual memory dynamics, and provides a 100% reversible, auditable quarantine model.
+Unlike traditional sweepers, Root operates without AI runtimes, requires no privileged `root` access, respects Linux virtual memory dynamics, and provides a reversible, auditable quarantine model—recovering resources without guesswork.
 
 ---
 
 ## The Problem: Resource Accumulation in Agentic Development
 
-Autonomous AI coding agents (such as Google Antigravity, Claude Code, and Aider) and modern developer toolchains (Node.js/pnpm, Rust/Cargo, Python) introduce new categories of resource waste and instability:
-1. **Unbounded Agent Scratchpads & Worktrees**: Cloned repositories, test suites, and temporary live worktrees that balloon to hundreds of megabytes per session and are never purged upon conversation closure.
-2. **Truncated Step Outputs & Diagnostic Logs**: Multi-megabyte raw stdout/stderr dumps and rotated CLI logs accumulating across sessions.
+Autonomous AI coding agents (such as Google Antigravity, Claude Code, and Aider) and modern developer toolchains (Node.js/pnpm, Rust/Cargo, Python) introduce distinct categories of resource waste and instability:
+1. **Unbounded Agent Scratchpads and Worktrees**: Cloned repositories, test suites, and temporary live worktrees that balloon to hundreds of megabytes per session—often left abandoned once the conversation concludes.
+2. **Truncated Step Outputs and Diagnostic Logs**: Multi-megabyte raw stdout and stderr dumps and rotated CLI logs accumulating across sessions.
 3. **Leaked Command Environments**: Orphaned UUID directory structures and captured shell environment scripts.
-4. **Orphaned Background Daemons & LSPs**: Abandoned development servers (Vite, Next.js) and language servers (`rust-analyzer`, `tsserver`) left running under PID 1 after agent or terminal crashes, silently consuming CPU cycles and gigabytes of RAM.
+4. **Orphaned Background Daemons and Language Servers**: Abandoned development servers (Vite, Next.js) and language servers (`rust-analyzer`, `tsserver`) left running under PID 1 after agent or terminal crashes—silently consuming CPU cycles and gigabytes of RAM.
 
 ---
 
-## Core Guarantees & Philosophy
+## Core Guarantees
 
 - **Zero Elevated Privileges**: Root runs entirely in unprivileged user space. It never invokes `sudo`, requests `root`, or modifies system-wide files.
-- **Deterministic & Algorithmic**: Root uses zero AI models, cloud heuristics, or telemetry. Every decision is based on explicit, testable, deterministic rules.
-- **Respect for Linux Memory Subsystems**: Root does not clear page caches (`drop_caches`) or swap. It accurately accounts for process memory using Proportional Set Size (PSS) and Unique Set Size (USS), preventing shared-memory double-counting.
+- **Deterministic and Algorithmic**: Root uses zero AI models, cloud heuristics, or telemetry. Every decision derives from explicit, testable rules.
+- **Respect for Linux Memory Subsystems**: Root does not clear page caches (`drop_caches`) or swap. It measures process memory using Proportional Set Size (PSS) and Unique Set Size (USS)—preventing shared-memory double counting.
 - **Strict Protection of Developer Context**: Agent conversation histories (`transcript.jsonl`, `sessions/*.json`), authentication credentials (`oauth_creds.json`, `.key` files), and Git repositories with uncommitted changes are strictly protected.
-- **Quarantine-First & Reversible**: Mutations are performed as atomic renames into a local quarantine directory with a cryptographic rollback journal (`root undo`).
-- **World-Class Native Desktop Experience**: Built with GTK4 and libadwaita following the [Designing-Skills](https://github.com/realmadede/Designing-Skills.git) framework.
+- **Quarantine-First and Reversible**: Mutations are performed as renames into a local quarantine directory with a cryptographic rollback journal (`root undo`).
+- **Native Desktop Architecture**: Interface designs follow the [Designing-Skills](https://github.com/realmadede/Designing-Skills.git) framework for GTK4 and libadwaita.
 
 ---
 
 ## Hybrid Operating Architecture
 
-Root supports three operating modes powered by a single shared analysis and policy engine:
+Root supports three operating modes powered by a single shared analysis and policy engine—ensuring identical rules apply whether inspecting on demand, on a schedule, or in real time:
 
 ```mermaid
 graph LR
@@ -43,9 +43,9 @@ graph LR
     ModeC["Mode C: Live Monitoring<br>(inotify + cgroups v2 PSI)"] --- CoreEngine
 ```
 
-1. **Mode A (On-Demand)**: Manual user-initiated inspection and quarantine via CLI or desktop GUI. (Zero background footprint).
+1. **Mode A (On-Demand)**: Manual user-initiated inspection and quarantine via CLI or desktop GUI—with zero background overhead.
 2. **Mode B (Scheduled)**: Periodic passive inspection using `systemd --user` timers. Dispatches non-intrusive desktop notifications via D-Bus when resource thresholds are exceeded. Never deletes automatically.
-3. **Mode C (Live Monitoring)**: Optional event-driven watcher leveraging Linux `inotify` and cgroups v2 Pressure Stall Information (PSI) for active agent swarms, with zero busy-wait CPU polling.
+3. **Mode C (Live Monitoring)**: Optional event-driven watcher leveraging Linux `inotify` and cgroups v2 Pressure Stall Information (PSI) for active agent swarms, operating without busy-wait CPU polling.
 
 ---
 
@@ -53,7 +53,6 @@ graph LR
 
 | Document | Purpose |
 |---|---|
-| [**AGENTS.md**](AGENTS.md) | **Mandatory operating invariants and development rules for AI coding agents.** |
 | [**ARCHITECTURE.md**](ARCHITECTURE.md) | High-level system architecture, crate boundaries, and transactional lifecycle. |
 | [**SECURITY.md**](SECURITY.md) | Security policy, least-privilege guarantees, and vulnerability reporting. |
 | [**REQUIREMENTS.md**](REQUIREMENTS.md) | Functional, non-functional, and platform requirements. |
@@ -66,6 +65,7 @@ graph LR
 | [**docs/design-foundation.md**](docs/design-foundation.md) | Native GNOME GUI design foundation adapted from Designing-Skills (commit `2d22863`). |
 | [**docs/roadmap.md**](docs/roadmap.md) | Phased implementation plan from Phase 00 through 1.0 release. |
 | [**docs/phase-00-report.md**](docs/phase-00-report.md) | Comprehensive Phase 00 Completion and Research Report. |
+| [**docs/phase-01-report.md**](docs/phase-01-report.md) | Comprehensive Phase 01 Completion Report (Domain Models & Fixtures). |
 
 ### Research Library
 - [Linux Resource Management Research](docs/research/linux-resource-management.md)

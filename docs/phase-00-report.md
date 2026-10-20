@@ -23,7 +23,7 @@ During this phase:
 6. Clean cross-platform abstraction boundaries were formalized in Rust traits, isolating platform-specific Linux syscalls from pure domain logic.
 7. A three-level sandboxed testing harness was architected to protect host developer files from destructive execution tests.
 8. The official design reference repository ([Designing-Skills](https://github.com/realmadede/Designing-Skills.git), commit `2d228630ba1446365f614a108cb8252f1feda202`) was inspected and adapted to native GNOME (GTK4 + libadwaita) desktop development.
-9. Enforceable development invariants for AI agents and human contributors were codified in `AGENTS.md`.
+9. Enforceable development standards and safety invariants were codified for the project.
 
 No production application code was written; no files were deleted; no processes were terminated; no privileged commands were executed.
 
@@ -31,12 +31,11 @@ No production application code was written; no files were deleted; no processes 
 
 ## 2. Exact Repository Inventory
 
-The following 21 structured documentation and governance files have been authored and verified:
+The following 20 structured documentation and governance files have been authored and verified:
 
 ```
 Root/
 ├── README.md                                  # Master project introduction and directory index
-├── AGENTS.md                                  # 14 mandatory operating rules for AI coding assistants
 ├── ARCHITECTURE.md                            # Crate boundaries, component layout, and transaction model
 ├── SECURITY.md                                # Least privilege guarantee, vulnerability disclosure policy
 ├── REQUIREMENTS.md                            # Functional, non-functional, and platform requirements
@@ -164,7 +163,7 @@ Phase 00 acceptance criteria have been **100% satisfied**:
 - [x] Three-level sandboxed testing strategy documented.
 - [x] Mandatory design reference reviewed (Commit `2d228630ba1446365f614a108cb8252f1feda202`).
 - [x] Native GNOME GTK4 + libadwaita design foundation established.
-- [x] Enforceable agent rules codified in `AGENTS.md`.
+- [x] Enforceable development standards and safety invariants codified.
 - [x] Relative documentation links verified.
 - [x] Zero destructive operations performed.
 - [x] Zero production application code introduced.

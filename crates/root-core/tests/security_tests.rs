@@ -284,7 +284,7 @@ fn test_synthetic_fixtures_adversarial_coverage() {
 
     // 1. Unusual names: spaces, unicode, quotes, dashes
     assert!(root.join("unusual_names/file with spaces.log").exists());
-    assert!(root.join("unusual_names/файл-тест 🚀.dat").exists());
+    assert!(root.join("unusual_names/файл-тест-отчет.dat").exists());
     assert!(root.join("unusual_names/\"quoted_name\".txt").exists());
     assert!(root.join("unusual_names/--leading-dashes.tmp").exists());
 

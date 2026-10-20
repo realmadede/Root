@@ -163,7 +163,7 @@ Four core traits mediate all operating system interactions:
    - Antigravity: `brain/` active session with `transcript.jsonl`, abandoned session with `scratch/` and `.system_generated/steps/1/output.txt`, diagnostic logs, `oauth_creds.json`.
    - Claude Code: `sessions/` with `.json` and `.key`, empty `session-env/<uuid>` leaked directories, and `shell-snapshots/`.
    - Workspaces: Cargo `target/debug`, npm `node_modules/lodash`, and `.git/HEAD`.
-7. **Unusual names**: Space characters, Unicode (`файл-тест 🚀.dat`), quotes (`"quoted_name".txt`), leading dashes (`--leading-dashes.tmp`), newlines (`\n`).
+7. **Unusual names**: Space characters, Unicode (`файл-тест-отчет.dat`), quotes (`"quoted_name".txt`), leading dashes (`--leading-dashes.tmp`), newlines (`\n`).
 8. **Empty directories**: Orphan empty folders and nested empty folders.
 9. **Permission scenarios**: Read-only directory (`0o555`).
 

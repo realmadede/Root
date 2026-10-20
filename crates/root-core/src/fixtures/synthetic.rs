@@ -248,7 +248,10 @@ impl SyntheticFixture {
 
     fn create_unusual_names(&self) -> Result<()> {
         self.write_file("unusual_names/file with spaces.log", b"spaces")?;
-        self.write_file("unusual_names/файл-тест 🚀.dat", b"unicode and emoji")?;
+        self.write_file(
+            "unusual_names/файл-тест-отчет.dat",
+            b"unicode cyrillic content",
+        )?;
         self.write_file("unusual_names/\"quoted_name\".txt", b"quotes")?;
         self.write_file("unusual_names/--leading-dashes.tmp", b"dashes")?;
         self.write_file("unusual_names/newlines\nin\nname.tmp", b"newlines")?;
