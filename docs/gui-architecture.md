@@ -141,22 +141,25 @@ To ensure GTK's main thread maintains a fluid 60fps/120fps frame budget during h
 ### 6.2. Dual Compilation Modes
 Root provides dual compilation targets to support both graphical workstations and headless CI pipelines:
 
-1. **Headless View-Model Mode (Default)**:
-   ```bash
-   cargo build -p root-gui
-   cargo test -p root-gui
-   ```
-   Compiles and verifies all view models, presentation formatters, controllers, background workers, and business logic with zero display or C library build dependencies.
-
-2. **Native Graphical Mode (`--features gtk`)**:
+1. **Native Graphical Mode (Default)**:
    ```bash
    # Prerequisites on Debian/Ubuntu/Kali:
    sudo apt install pkg-config libgtk-4-dev libadwaita-1-dev
 
    # Build and run native desktop application:
+   cargo run -p root-gui
+   # or explicitly:
    cargo run -p root-gui --features gtk
    ```
+   Compiles the native libadwaita window, view stack, header bar, and all seven view builders displaying real Linux kernel and workstation discovery telemetry.
+
+2. **Headless View-Model Mode (`--no-default-features`)**:
+   ```bash
+   cargo build -p root-gui --no-default-features
+   cargo test -p root-gui --no-default-features
+   ```
+   Compiles and verifies all view models, presentation formatters, controllers, background workers, and business logic with zero display or C library build dependencies for headless CI runners.
 
 ### 6.3. Desktop Integration Files
-- Desktop Entry: `data/io.github.realmadede.Root.desktop`
-- AppStream Metadata: `data/io.github.realmadede.Root.metainfo.xml`
+- Desktop Entry: `data/io.github.realmadede.Root.desktop` (Validated against FreeDesktop standards via `desktop-file-validate`)
+- AppStream Metadata: `data/io.github.realmadede.Root.metainfo.xml` (OARS 1.1 compliant AppStream specification)

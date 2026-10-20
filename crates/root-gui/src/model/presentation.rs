@@ -151,3 +151,10 @@ pub fn badge_for_lifecycle(lifecycle: LifecycleState) -> LifecycleBadge {
         },
     }
 }
+
+/// Escapes special characters for Pango markup in GTK labels and action rows.
+pub fn escape_markup(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}

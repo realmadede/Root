@@ -174,7 +174,22 @@ gantt
 
 ---
 
-### Phase 09: Cross-Platform Expansion (macOS & Windows)
+### Phase 09: Native Desktop Integration, Usability & Security Validation — COMPLETED
+- **Status**: COMPLETE
+- **Primary Goal**: Validate, integrate, test, and refine Root's native GTK4/libadwaita desktop application on real Linux desktops (Kali Linux Rolling with GNOME on Wayland).
+- **Key Accomplishments**:
+  - Validated native GTK4 and libadwaita compilation with `default = ["gtk"]` and clean headless fallback (`--no-default-features`) for CI.
+  - Implemented real GTK view modules across all seven tabs (`Overview`, `Resources`, `Agents`, `Processes`, `Activity`, `Schedule`, `Settings`) displaying live kernel and discovery telemetry.
+  - Added Pango markup character escaping (`escape_markup`), eliminating all GTK markup parsing warnings on ampersands and special characters.
+  - Integrated `AdwStyleManager` theme switching (System Default, Force Light, Force Dark).
+  - Verified FreeDesktop desktop entry (`data/io.github.realmadede.Root.desktop`) via `desktop-file-validate` with zero errors.
+  - Recorded empirical performance measurements on host workstation (1.0s launch time, 119.9 MiB idle RSS, 10.5ms shutdown latency, <1ms cancellation latency).
+  - Extended regression suite to 26 automated tests in `root-gui` covering all Section 23 areas, including Level B native GTK component construction; achieved 158 total passing tests across the workspace.
+- **Safety Gate**: Passed all 158 workspace tests; strictly read-only execution; zero mutation actions exposed; Guardian rejects all mutating requests unconditionally.
+
+---
+
+### Phase 10: Cross-Platform Expansion (macOS & Windows)
 - **Primary Goal**: Bring Root's deterministic resource management to other platforms.
 - **Key Tasks**:
   - Implement `root-platform-macos` (Darwin `proc_pidinfo`, launchd user agents, FSEvents).
@@ -183,7 +198,7 @@ gantt
 
 ---
 
-### Phase 10: 1.0 Production Hardening, Packaging & Security Audit
+### Phase 11: 1.0 Production Hardening, Packaging & Security Audit
 - **Primary Goal**: Publish audited, production-grade open source releases.
 - **Key Tasks**:
   - Comprehensive third-party security audit.

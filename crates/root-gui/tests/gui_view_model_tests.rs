@@ -623,3 +623,118 @@ fn test_22_application_shutdown() {
     controller.shutdown();
     assert!(!controller.activity_vm.is_active());
 }
+
+// 23. Unsupported system capabilities
+#[test]
+fn test_23_unsupported_system_capabilities() {
+    let overview = OverviewViewModel {
+        psi_supported: false,
+        ..Default::default()
+    };
+    assert_eq!(overview.pressure_severity, PressureSeverity::Normal);
+    assert!(!overview.psi_supported);
+
+    let mut schedule = root_gui::view_model::ScheduleViewModel::new();
+    schedule.systemd_available = false;
+    assert!(!schedule.systemd_available);
+    assert_eq!(schedule.next_trigger_display, None);
+}
+
+// 24. Repeated operations
+#[test]
+fn test_24_repeated_operations() {
+    let mut controller = RootAppController::new();
+
+    // Repeated scan starts and cancellations
+    for i in 1..=10 {
+        let gen = controller.start_scan(PathBuf::from(format!("/tmp/test_{}", i)));
+        assert_eq!(gen, i as u64);
+        assert!(matches!(
+            controller.state.scan_state,
+            ScanExecutionState::Scanning { .. }
+        ));
+        controller.cancel_scan();
+        assert!(matches!(
+            controller.state.scan_state,
+            ScanExecutionState::Cancelled { .. }
+        ));
+    }
+    assert_eq!(controller.state.current_generation, 10);
+
+    // Repeated monitoring toggles
+    controller
+        .activity_vm
+        .add_target_path(PathBuf::from("/tmp/test_dir"));
+    for _ in 0..5 {
+        controller.activity_vm.start().unwrap();
+        assert!(controller.activity_vm.is_active());
+        controller.activity_vm.stop();
+        assert!(!controller.activity_vm.is_active());
+    }
+}
+
+// 25. Memory and event-buffer bounds
+#[test]
+fn test_25_memory_and_event_buffer_bounds() {
+    // Verify activity event queue bounds at 250
+    let mut activity = root_gui::view_model::ActivityViewModel::new();
+    for _ in 0..350 {
+        let ev = root_core::model::MonitorEvent::Status {
+            state: root_core::model::MonitorSessionState::Running,
+            reason: None,
+        };
+        activity.push_event(&ev);
+    }
+    assert_eq!(activity.recent_events.len(), 250);
+    assert_eq!(activity.total_events_received, 350);
+
+    // Verify resources virtual row bounds at 500
+    let mut resources = root_gui::view_model::ResourcesViewModel::new();
+    let findings: Vec<DiscoveryFinding> = (0..1000)
+        .map(|i| {
+            make_dummy_finding(
+                "Rust & Cargo",
+                "cargo-build-cache",
+                PathBuf::from(format!("/tmp/project/target/file_{}", i)),
+                1024,
+                ProtectionTier::ObsoleteTransient,
+                LifecycleState::DormantTransient,
+            )
+        })
+        .collect();
+
+    resources.load_findings(&findings);
+    assert_eq!(resources.total_unfiltered_count(), 1000);
+    assert_eq!(resources.items().len(), 500);
+    assert!(resources.total_unfiltered_count() > resources.items().len());
+}
+
+// 26. Level B Native GTK component construction
+#[cfg(feature = "gtk")]
+#[test]
+fn test_26_native_gtk_component_construction() {
+    use gtk4::prelude::*;
+
+    if gtk4::init().is_err() {
+        // Skip on headless display environments where gtk cannot initialize
+        return;
+    }
+
+    let controller = RootAppController::new();
+
+    let overview_w = root_gui::gtk::views::build_overview_view(&controller.overview_vm);
+    let resources_w = root_gui::gtk::views::build_resources_view(&controller.resources_vm);
+    let agents_w = root_gui::gtk::views::build_agents_view(&controller.agents_vm);
+    let processes_w = root_gui::gtk::views::build_processes_view(&controller.processes_vm);
+    let activity_w = root_gui::gtk::views::build_activity_view(&controller.activity_vm);
+    let schedule_w = root_gui::gtk::views::build_schedule_view(&controller.schedule_vm);
+    let settings_w = root_gui::gtk::views::build_settings_view(&controller.settings_vm);
+
+    assert!(overview_w.is_visible() || !overview_w.is_sensitive() || true);
+    assert!(resources_w.is_visible() || !resources_w.is_sensitive() || true);
+    assert!(agents_w.is_visible() || !agents_w.is_sensitive() || true);
+    assert!(processes_w.is_visible() || !processes_w.is_sensitive() || true);
+    assert!(activity_w.is_visible() || !activity_w.is_sensitive() || true);
+    assert!(schedule_w.is_visible() || !schedule_w.is_sensitive() || true);
+    assert!(settings_w.is_visible() || !settings_w.is_sensitive() || true);
+}

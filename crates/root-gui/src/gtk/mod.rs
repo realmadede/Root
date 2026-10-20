@@ -1,6 +1,8 @@
 #[cfg(feature = "gtk")]
 pub mod application;
 #[cfg(feature = "gtk")]
+pub mod views;
+#[cfg(feature = "gtk")]
 pub mod window;
 
 #[cfg(feature = "gtk")]
@@ -30,5 +32,5 @@ pub fn run_desktop_app() -> i32 {
     eprintln!(
         "All headless view models, data controllers, and background workers are fully functional."
     );
-    0
+    1
 }
