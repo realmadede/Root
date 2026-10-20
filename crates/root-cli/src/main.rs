@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+mod discover;
 mod doctor;
 mod inspect;
 mod scan;
@@ -32,6 +33,33 @@ enum Commands {
         /// Dry-run simulation (mandated in Phase 02)
         #[arg(long, default_value_t = true)]
         dry_run: bool,
+
+        /// Output results as structured JSON
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+
+    /// Discover and classify resources created by AI coding agents and development tools
+    Discover {
+        /// Optional root path to scan (defaults to detected agent paths or synthetic fixture)
+        #[arg(short, long)]
+        path: Option<PathBuf>,
+
+        /// Filter discovery to AI coding agents only
+        #[arg(long, default_value_t = false)]
+        agents: bool,
+
+        /// Filter discovery to development tooling only
+        #[arg(long, default_value_t = false)]
+        tools: bool,
+
+        /// Filter discovery to a specific AI coding agent (e.g. antigravity, claude, codex, gemini, aider)
+        #[arg(long)]
+        agent: Option<String>,
+
+        /// Filter discovery to a specific development tool (e.g. rust, cargo, node, npm, pnpm, python, git, lsp)
+        #[arg(long)]
+        tool: Option<String>,
 
         /// Output results as structured JSON
         #[arg(long, default_value_t = false)]
@@ -75,6 +103,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Scan { path, json, .. } => {
             scan::run_scan(path, json)?;
+        }
+        Commands::Discover {
+            path,
+            agents,
+            tools,
+            agent,
+            tool,
+            json,
+        } => {
+            discover::run_discover(path, agents, tools, agent, tool, json)?;
         }
         Commands::Inspect { target } => match target {
             InspectCommands::Memory { json } => {

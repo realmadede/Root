@@ -143,3 +143,26 @@ Phase 01 introduces seven foundational corrections to refine earlier Phase 00 as
 7. **Transactional Robustness & Metadata Preservation**:
    - Any mutation must preserve complete metadata: POSIX file modes, ownership UID/GID (where permitted), timestamps (mtime, atime), and extended attributes (xattrs).
    - The engine must gracefully abort and roll back if files are modified concurrently during execution.
+
+---
+
+## 6. Discovery Engine & Resource Classification (Phase 03)
+
+Phase 03 implements the read-only discovery engine (`root_core::discovery`) coordinating rule evaluation, lifecycle assessment, and Guardian safety validation across AI coding agents and development tooling:
+
+```mermaid
+flowchart TD
+    ScanRoots["Scan Roots (Allowlist or User Path)"] --> Traverse["Defensive Bounded Traversal (LinuxFilesystem)"]
+    Traverse --> RawEntries["Raw Entries (Path, Metadata, Dev, Ino)"]
+    RawEntries --> RuleMatch["RuleRegistry Match (Pattern, Base, Category)"]
+    RuleMatch --> Lifecycle["Multi-Factor Lifecycle Assessment (/proc & Locks)"]
+    Lifecycle --> Guardian["Guardian Read-Only Policy Check"]
+    Guardian --> Finding["DiscoveryFinding (Target, Tier, Action, Lifecycle)"]
+    Finding --> Report["DiscoveryReport (JSON or Terminal Table)"]
+```
+
+### Architectural Guarantees:
+- **Discovery Does Not Imply Deletion**: Discovering a transient or obsolete artifact does not grant cleanup authorization.
+- **Uncertainty Resolves to Protection**: Any resource with inconclusive evidence, recent modification (<1h), or conflicting ownership is categorized as `Unknown` / `StrictlyProtected` and preserved in place.
+- **Zero Content Inspection**: Discovery operates solely on path structure, file attributes, inode metadata, and process table telemetry. File contents, conversation histories, tokens, and encryption keys are strictly ignored.
+- **Shared Package Store Safety**: Content-addressable package stores using hard links across projects (pnpm) are identified as `StrictlyProtected` with `ProposedAction::Ignore` to prevent workspace corruption.

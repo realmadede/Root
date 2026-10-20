@@ -59,6 +59,8 @@ pub enum RejectionReason {
     Phase01ReadOnlyPolicy,
     /// Strict Phase 02 safety invariant: all destructive operations and mutations are prohibited.
     Phase02ReadOnlyPolicy,
+    /// Strict Phase 03 safety invariant: discovery is strictly read-only; destructive operations and mutations are prohibited.
+    Phase03ReadOnlyPolicy,
     /// The resource is classified as Tier 1 (Strictly Protected).
     TierStrictlyProtected,
     /// Path resides in a protected location (e.g. system directory, SSH keys, user documents).

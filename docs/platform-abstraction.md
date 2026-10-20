@@ -221,3 +221,26 @@ Filesystem traversal (`LinuxFilesystem::traverse`) enforces strict safety invari
 - **Abandonment Corroboration**: A process reparented to PID 1 is never classified as abandoned without corroborating factors: controlling terminal detachment (`tty_nr == 0`) and matching development signatures.
 - **Command-Line Privacy**: Process command lines are sanitized to redact credentials, tokens, and sensitive flags before serialization or display.
 - **Proportional Memory Accounting**: Memory metrics utilize proportional sharing (`smaps_rollup` PSS) where accessible, warning against naive summation of raw RSS values.
+
+### 4.4 Agent and Development Tool Discovery Engine
+Root discovers and classifies resources created by AI coding assistants and development toolchains using deterministic, versioned rules rather than heuristic guessing:
+
+1. **Discovery Targets**:
+   - **AI Coding Agents**: Google Antigravity, Claude Code, OpenAI Codex, Gemini CLI, Aider Pair Programmer.
+   - **Development Tooling**: Node.js & npm, pnpm, Rust & Cargo, Python, Git, Language Servers (rust-analyzer, clangd, pyright), Dev Servers (Vite, Next.js, Webpack, Parcel).
+
+2. **Verified Ownership vs. Inferred Ownership**:
+   - **Verified Ownership**: Established when concrete runtime telemetry directly links a resource to an active or recorded process (e.g., active presence lockfiles, matching live PID in `/proc`, or recorded session IDs in local daemon sockets).
+   - **Inferred Ownership**: Established purely from standard directory layouts and filenames (e.g., `node_modules/`, `target/debug/`, `__pycache__/`). Inferred resources are treated with lower confidence and require explicit user review or longer inactivity periods before action eligibility.
+
+3. **Multi-Factor Lifecycle States**:
+   - **`Active`**: Resource is held open by an active process, contains a live session lock marker, or was touched by a running daemon. Mutation or termination is strictly prevented.
+   - **`Persistent`**: Resource holds permanent session state, user authentication tokens, encryption keys, or configuration. Marked `StrictlyProtected` with proposed action `Ignore`.
+   - **`DormantTransient`**: Resource is an ephemeral scratchpad, build artifact, or diagnostic log with no active process holding it and an age exceeding 48 hours.
+   - **`Unknown`**: Inconclusive evidence or file modified within the last hour. Default to protection.
+
+4. **Shared Package Store Protection (pnpm)**:
+   - Global package stores like `~/.local/share/pnpm/store/` utilize hard links across projects. Direct unlinking corrupts other projects on the system sharing the same inode. Root permanently classifies pnpm store entries as `StrictlyProtected` with `ProposedAction::Ignore`.
+
+5. **Metadata-Only Privacy Guarantee**:
+   - Root discovery exclusively queries paths, POSIX file metadata (statx/lstat), inode counts, and process tables. Private file contents, conversation transcripts, and authentication tokens are never read, stored, or serialized.

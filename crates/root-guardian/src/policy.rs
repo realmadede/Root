@@ -34,15 +34,15 @@ impl GuardianPolicy {
         action: ProposedAction,
         current_uid: u32,
     ) -> SafetyDecision {
-        // Rule 1: Read-Only Invariant for Phase 01/02: reject all mutating operations
+        // Rule 1: Read-Only Invariant for Phase 01/02/03: reject all mutating operations
         if self.read_only_mode {
             match action {
                 ProposedAction::Quarantine
                 | ProposedAction::Prune
                 | ProposedAction::TerminateGraceful => {
                     return SafetyDecision::reject(
-                        RejectionReason::Phase02ReadOnlyPolicy,
-                        "Phase 02 operates strictly in read-only mode; destructive and mutating actions are permanently prohibited",
+                        RejectionReason::Phase03ReadOnlyPolicy,
+                        "Phase 03 operates strictly in read-only mode; destructive and mutating actions are permanently prohibited",
                     );
                 }
                 ProposedAction::Inspect | ProposedAction::Ignore => {}
@@ -197,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn test_phase02_rejects_all_mutations() {
+    fn test_phase03_rejects_all_mutations() {
         let policy = GuardianPolicy::new();
         let (target, tier) =
             make_test_resource("/tmp/test.tmp", 1000, ProtectionTier::SafeRecoverable);
@@ -205,9 +205,9 @@ mod tests {
         let decision = policy.evaluate(&target, tier, ProposedAction::Quarantine, 1000);
         match decision {
             SafetyDecision::Rejected { reason, .. } => {
-                assert_eq!(reason, RejectionReason::Phase02ReadOnlyPolicy);
+                assert_eq!(reason, RejectionReason::Phase03ReadOnlyPolicy);
             }
-            SafetyDecision::Allowed => panic!("Phase 02 must reject quarantine"),
+            SafetyDecision::Allowed => panic!("Phase 03 must reject quarantine"),
         }
     }
 

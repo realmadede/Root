@@ -68,15 +68,19 @@ gantt
 
 ---
 
-### Phase 03: Agent & Tooling Scanners (`root-storage`, `root-process`, `root-workspace`)
-- **Primary Goal**: Build deterministic scanners for development tools and AI agents.
-- **Key Tasks**:
-  - Implement Antigravity scanner (`brain/`, `.system_generated/`, `scratch/`, `log/`, `crashes/`).
-  - Implement Claude Code scanner (`sessions/`, `session-env/`, `shell-snapshots/`, `backups/`).
-  - Implement tooling scanners: Cargo `target/`, npm/pnpm `node_modules/`, Python `__pycache__`/`.venv`.
-  - Implement Git workspace checker (`git status --porcelain`, uncommitted work protection).
-  - Implement orphaned process fingerprinting (LSPs, dev servers with PPID == 1).
-- **Safety Gate**: Accurate identification without touching credentials or conversation transcripts.
+### Phase 03: Agent and Development Tool Discovery Engine (`root-core::discovery`, `root-cli::discover`)
+- **Status**: COMPLETE
+- **Primary Goal**: Build deterministic, read-only discovery engines for AI coding agents and development toolchains.
+- **Key Accomplishments**:
+  - Implemented 12 discovery targets across AI coding agents (Google Antigravity, Claude Code, OpenAI Codex, Gemini CLI, Aider) and development tooling (Node.js & npm, pnpm, Rust & Cargo, Python, Git, Language Servers, Dev Servers).
+  - Implemented versioned, deterministic `DiscoveryRule` catalog (`RuleRegistry`) documenting evidence source, confidence level, and known limitations for every rule.
+  - Implemented multi-factor `LifecycleAssessment` engine correlating file metadata, timestamps, presence markers, and active OS process tables (`Active`, `Persistent`, `DormantTransient`, `Unknown`).
+  - Implemented dedicated pnpm hard-link store protection (`StrictlyProtected` with `ProposedAction::Ignore`) preventing cross-project inode corruption.
+  - Upheld Root Guardian Phase 03 read-only policy: all mutations (`Quarantine`, `Prune`, `TerminateGraceful`) permanently prohibited.
+  - Enforced metadata-only privacy safeguards: zero file content reading; verified no credentials, encryption keys, or transcripts leak into reports.
+  - Implemented CLI discovery command: `root discover` supporting target filters (`--agents`, `--tools`, `--agent <name>`, `--tool <name>`) and JSON output (`--json`).
+  - Added dedicated integration test suite (`tests/discovery_tests.rs`); passed 32 workspace tests with zero failures.
+- **Safety Gate**: Passed all 32 tests; verified read-only non-destructive operation on synthetic fixture and host system.
 
 ---
 

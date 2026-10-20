@@ -243,6 +243,88 @@ impl SyntheticFixture {
             b"ref: refs/heads/main\n",
         )?;
 
+        // Active session presence marker for Antigravity
+        self.write_file(
+            "agent_simulated/gemini/antigravity-cli/presence/session_active.lock",
+            b"pid: 1234\n",
+        )?;
+
+        // OpenAI Codex simulation
+        self.write_file(
+            "agent_simulated/cache/openai/prompt_cache_hash_9876.dat",
+            b"cached_completion_tokens_binary",
+        )?;
+        self.write_file(
+            "agent_simulated/openai/api_key",
+            b"sk-synthetic-dummy-key-never-leak",
+        )?;
+
+        // Gemini CLI simulation
+        self.write_file(
+            "agent_simulated/gemini/tmp/orphan_upload.chunk",
+            b"incomplete_multipart_upload_chunk_data",
+        )?;
+        self.write_file(
+            "agent_simulated/gemini/history/input_history.txt",
+            b"prompt 1\nprompt 2\n",
+        )?;
+
+        // Aider simulation
+        self.write_file(
+            "agent_simulated/workspaces/app1/.aider.tags.cache.v3",
+            b"precomputed_ast_symbol_index_tags_data",
+        )?;
+        self.write_file(
+            "agent_simulated/workspaces/app1/.aider.chat.history.md",
+            b"# Aider chat history\nUSER: Add feature\n",
+        )?;
+        self.write_file(
+            "agent_simulated/workspaces/app1/.aider.input.history",
+            b"/add src/main.rs\n",
+        )?;
+
+        // Python bytecode and pytest cache simulation
+        self.write_file(
+            "agent_simulated/workspaces/app1/__pycache__/module.cpython-312.pyc",
+            b"compiled_bytecode_magic_bytes",
+        )?;
+        self.write_file(
+            "agent_simulated/workspaces/app1/.pytest_cache/v/cache/lastfailed",
+            b"{\"test_failure\": true}",
+        )?;
+
+        // Shared package store simulation (pnpm content-addressable store)
+        self.write_file(
+            "agent_simulated/local/share/pnpm/store/v3/files/ab/cdef123456",
+            b"shared_content_addressed_file",
+        )?;
+
+        // Language server cache simulation
+        self.write_file(
+            "agent_simulated/cache/rust-analyzer/project_index_123.bin",
+            b"precomputed_ast_index_bytes",
+        )?;
+        self.write_file(
+            "agent_simulated/cache/clangd/index/symbol.idx",
+            b"clangd_symbol_index_bytes",
+        )?;
+
+        // Dev server cache simulation
+        self.write_file(
+            "agent_simulated/workspaces/app1/.next/cache/webpack/client-development/0.pack",
+            b"packed_asset_chunk_cache",
+        )?;
+        self.write_file(
+            "agent_simulated/workspaces/app1/node_modules/.vite/deps/package.json",
+            b"{\"name\": \"vite-cache\"}",
+        )?;
+
+        // Unknown tool directory simulation
+        self.write_file(
+            "agent_simulated/unknown_vendor/temp_cache.bin",
+            b"unknown_binary_cache_data",
+        )?;
+
         Ok(())
     }
 

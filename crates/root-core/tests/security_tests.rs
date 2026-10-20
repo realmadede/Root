@@ -57,7 +57,8 @@ fn test_unsupported_operations_rejected_in_phase01() {
         match decision {
             SafetyDecision::Rejected { reason, .. } => {
                 assert!(
-                    reason == RejectionReason::Phase02ReadOnlyPolicy
+                    reason == RejectionReason::Phase03ReadOnlyPolicy
+                        || reason == RejectionReason::Phase02ReadOnlyPolicy
                         || reason == RejectionReason::Phase01ReadOnlyPolicy
                 );
             }
