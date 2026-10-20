@@ -140,6 +140,18 @@ Completely removes Mode B scheduled units and configuration:
 - Deletes the schedule configuration file `$XDG_CONFIG_HOME/root/schedule.json`.
 - Retains execution history for auditing purposes unless manually cleared.
 
+### `root monitor [--path <path>...] [--agent <name>] [-P|--processes] [-M|--memory] [--interval <secs>] [--duration <secs>] [--max-events <N>] [--max-watches <N>] [--json]`
+Launches a real-time, lightweight, read-only event observation session (Mode C):
+- **Explicit Scope Requirement**: Refuses to launch without at least one target scope specified (`--path`, `--agent`, `--processes`, or `--memory`). Unsafe targets (`/`, `/proc`, `/sys`, `/etc`) are strictly rejected.
+- **Filesystem Observation (`--path <path>`)**: Monitors recursive directory trees using POSIX non-blocking `inotify` (`inotify_init1`). Enforces symlink non-follow protection, dynamic subdirectory discovery, 150ms rapid write coalescing, and kernel queue overflow (`IN_Q_OVERFLOW`) detection.
+- **Agent Filtering (`--agent <name>`)**: Filters filesystem events to paths matched by the specified agent's discovery patterns and scopes process tracking to corresponding agent binaries (`antigravity`, `claude`, `codex`, `gemini`, `aider`).
+- **Process Lifecycle Observation (`-P, --processes`)**: Surveys unprivileged `/proc` tables for process spawning and exits. Resolves PID reuse via immutable `start_time_ticks` (field 22 of `/proc/[pid]/stat`).
+- **Memory Pressure Sampling (`-M, --memory`)**: Periodically samples `/proc/meminfo` and kernel PSI pressure metrics (`/proc/pressure/memory`). Flags degraded session state if 10-second memory stalls exceed 40.0%.
+- **Resource Budgets**: Supports maximum watch descriptor budgets (`--max-watches`, default: 512), bounded event queues (capped at 5,000 entries), and automatic timeout budgets (`--duration <secs>`).
+- **Graceful Termination**: Handles POSIX `SIGINT` (Ctrl+C) and `SIGTERM` signals cleanly, releasing all kernel watch descriptors and emitting a complete session summary.
+- **Strictly Read-Only Invariant**: Guardian unconditionally rejects all file mutations and process signals during live monitoring.
+- **Dual Presentation**: Streams interactive ANSI tabular dashboard adhering to `NO_COLOR` standards, or streaming newline-delimited JSON Lines (`--json`).
+
 ---
 
 ## 3. Terminal Design & Formatting Standards

@@ -8,6 +8,7 @@ pub mod explain;
 pub mod history;
 pub mod inspect;
 pub mod interactive;
+pub mod monitor;
 pub mod report;
 pub mod scan;
 pub mod schedule;
@@ -155,6 +156,29 @@ pub fn dispatch_command(command: Commands) -> Result<()> {
                 schedule::run_schedule_remove()?;
             }
         },
+        Commands::Monitor {
+            path,
+            agent,
+            processes,
+            memory,
+            interval,
+            duration,
+            max_events,
+            max_watches,
+            json,
+        } => {
+            monitor::run_monitor(monitor::MonitorCliOptions {
+                paths: path,
+                agent,
+                processes,
+                memory,
+                interval,
+                duration,
+                max_events,
+                max_watches,
+                json,
+            })?;
+        }
     }
 
     Ok(())

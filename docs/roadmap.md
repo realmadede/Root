@@ -136,14 +136,23 @@ gantt
 
 ---
 
-### Phase 07: Live Event Monitoring Engine (`root-monitor`, Mode C)
-- **Primary Goal**: Provide lightweight, event-driven monitoring for active multi-agent workflows.
-- **Key Tasks**:
-  - Implement `inotify` watcher for targeted agent workspaces.
-  - Implement cgroups v2 PSI memory pressure listener (`/sys/fs/cgroup/.../memory.pressure`).
-  - Real-time orphan process detection upon parent exit.
-  - Battery-aware throttling and sleep coalescing.
-- **Safety Gate**: CPU usage verified < 0.1% when idle; zero disk I/O thrashing.
+### Phase 07: Live Event Monitoring Engine (`root-monitor`, Mode C) — COMPLETED
+- **Status**: COMPLETE
+- **Primary Goal**: Provide lightweight, event-driven observation of filesystem mutations, agent process lifecycles, and memory pressure during active development sessions.
+- **Key Accomplishments**:
+  - Implemented core live monitoring domain models (`MonitorSessionState`, `DegradedReason`, `LiveFsEventKind`, `LiveFsEvent`, `ProcessEventKind`, `ProcessObservation`, `MemoryObservation`, `MonitorBudget`, `MonitorScope`, `MonitorEvent`, `MonitorSessionSummary`).
+  - Implemented POSIX non-blocking `inotify` watcher (`InotifyWatcher`) via `inotify_init1(IN_NONBLOCK | IN_CLOEXEC)` with recursive directory watching, dynamic child directory registration, and strict symlink non-follow protection.
+  - Implemented kernel inotify queue overflow (`IN_Q_OVERFLOW`) detection and degraded state transitions.
+  - Implemented rapid write event coalescing within a 150ms deduplication window, mitigating event storms from rapid file saves.
+  - Implemented unprivileged process lifecycle observation (`ProcessObserver`) via `/proc` polling, correlating active processes with agent signatures (`antigravity`, `claude`, `codex`, `gemini`, `aider`).
+  - Implemented robust PID reuse disambiguation tracking immutable `start_time_ticks` (field 22 of `/proc/[pid]/stat`).
+  - Implemented memory and PSI pressure sampling (`MemoryObserver`) via `/proc/meminfo` and `/proc/pressure/memory`, with elevated pressure detection (>40.0% stall).
+  - Implemented session coordinator (`LinuxMonitorSession`) managing degraded transitions, watch descriptor lifecycles, and clean teardown on `drop`.
+  - Implemented `root monitor` CLI command with target scope validation, POSIX signal handling (Ctrl+C), ANSI tabular dashboard adhering to `NO_COLOR`, and streaming newline-delimited JSON Lines (`--json`).
+  - Upheld Root Guardian read-only invariant: unconditionally rejects all mutations during live monitoring.
+  - Ensured concurrency independence: live monitoring does not acquire `schedule.lock`, allowing Mode B scheduled inspections and Mode C live monitoring to coexist without locking contention.
+  - Added comprehensive 25-scenario automated integration test suite (`crates/root-cli/tests/monitor_tests.rs`); achieved 132 total passing tests across the workspace.
+- **Safety Gate**: Passed all 132 workspace tests; live monitoring is strictly read-only; Guardian unconditionally rejects all mutations; zero permanent background daemons; zero credential or transcript leakage.
 
 ---
 

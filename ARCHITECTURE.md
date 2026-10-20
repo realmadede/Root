@@ -56,10 +56,12 @@ Root is organized as a unified Cargo workspace. In Phase 00, the architecture is
 ```
 crates/
 ├── root-core/          # Pure domain logic, policy rules, classification types
-│   └── src/model/schedule.rs # ScheduleConfig, ScheduleInterval, ScheduleStatus models
+│   ├── src/model/schedule.rs # ScheduleConfig, ScheduleInterval, ScheduleStatus models
+│   └── src/model/monitor.rs  # LiveFsEvent, ProcessObservation, MonitorBudget, DegradedReason
 ├── root-platform/      # Cross-platform traits (ProcessProvider, FilesystemWatcher, etc.)
-│   └── src/linux/      # Linux-specific implementation (/proc, cgroups v2, pidfd)
-│       └── scheduler.rs # systemd user unit generator, LinuxScheduler, DesktopNotifier
+│   └── src/linux/      # Linux-specific implementation (/proc, cgroups v2, pidfd, inotify)
+│       ├── scheduler.rs # systemd user unit generator, LinuxScheduler, DesktopNotifier
+│       └── monitor.rs   # InotifyWatcher, ProcessObserver, MemoryObserver, LinuxMonitorSession
 ├── root-guardian/      # Security engine, path canonicalization, symlink jail enforcement
 ├── root-audit/         # Rollback journaling, SHA256 integrity, transaction logs
 ├── root-storage/       # Filesystem scanner, hardlink deduplication, directory walk
@@ -76,10 +78,11 @@ crates/
 │   ├── explain.rs      # Explainability engine detailing provenance, uncertainty, and Guardian decisions
 │   ├── report.rs       # Consolidated diagnostic and audit reporting
 │   ├── schedule.rs     # Mode B systemd scheduling management, run orchestration, and notification
+│   ├── monitor.rs      # Mode C live event monitoring presentation and signal orchestration
 │   ├── interactive.rs  # Read-only interactive terminal navigation
 │   ├── terminal.rs     # NO_COLOR adherence, POSIX terminal width detection, tabular formatting
 │   └── history.rs      # XDG-compliant persistent scan history records
-├── root-monitor/       # (Future) Lightweight inotify / cgroup event daemon
+├── root-monitor/       # (Future) Standalone monitoring daemon crate if split from platform
 └── root-gui/           # (Future) Native GNOME GTK4 + libadwaita desktop interface
 ```
 
@@ -236,3 +239,35 @@ flowchart LR
 - **Concurrency Serialization**: Non-blocking `flock` on `$XDG_STATE_HOME/root/schedule.lock` ensures simultaneous manual scans and scheduled runs do not collide or degrade storage performance.
 - **Privacy-Preserving Notifications**: FreeDesktop notifications emit aggregate counts only, never leaking filenames, project paths, usernames, or sensitive metadata.
 - **Bounded State Retention**: Schedule run history stored at `$XDG_STATE_HOME/root/schedule_history.json` with mode `0o600` is strictly capped at 50 records via automatic chronological pruning.
+
+---
+
+## 9. Lightweight Live Event Monitoring (Phase 07, Mode C)
+
+Phase 07 introduces Mode C—optional, lightweight, strictly read-only live event monitoring observing filesystem mutations, agent process lifecycles, and memory pressure during active development sessions:
+
+```mermaid
+flowchart TD
+    CLI["root monitor (CLI Session)"] --> Session["LinuxMonitorSession (State Coordinator)"]
+    Session --> Inotify["InotifyWatcher<br>POSIX inotify_init1(IN_NONBLOCK | IN_CLOEXEC)"]
+    Session --> Proc["ProcessObserver<br>Unprivileged /proc Survey"]
+    Session --> Mem["MemoryObserver<br>/proc/meminfo & PSI Pressure"]
+
+    Inotify -->|LiveFsEvent| Queue["Bounded Event Queue (Cap: 5000)"]
+    Proc -->|ProcessObservation| Queue
+    Mem -->|MemoryObservation| Queue
+
+    Queue --> Presentation["Presentation Engine<br>• Terminal ANSI Table (NO_COLOR compliant)<br>• Streaming JSON Lines (--json)"]
+```
+
+### Architectural Guarantees:
+- **Explicit Activation**: Mode C is disabled by default and requires explicit invocation with an approved target scope (`--path`, `--agent`, `--processes`, `--memory`). Unsafe targets (`/`, `/proc`, `/sys`, `/etc`) are strictly rejected.
+- **Strictly Read-Only Guarantee**: Monitoring is purely observational. Under no circumstances does Mode C quarantine files, delete resources, prune directories, or send process termination signals. Guardian policy unconditionally blocks all mutations during monitoring.
+- **Non-Blocking inotify Watcher**: Uses non-blocking descriptors (`IN_NONBLOCK | IN_CLOEXEC`), recursive directory walking, and strict symlink non-follow protection (`IN_DONT_FOLLOW`). Dynamic child directories are watched as they are created.
+- **Kernel Queue Overflow Resilience**: Detects `IN_Q_OVERFLOW` (`wd == -1`), transitioning the session to `Degraded` with `DegradedReason::QueueOverflow` and logging diagnostic warnings without crashing.
+- **Rapid Write Event Coalescing**: Consecutive `Modified` events targeting the same file within a 150ms window are deduplicated, suppressing terminal jitter and memory consumption during build bursts.
+- **PID Reuse Resilience**: Distinguishes true process lifecycles from PID recycling by tracking immutable `start_time_ticks` from field 22 of `/proc/[pid]/stat`.
+- **Memory Pressure Sampling**: Samples `/proc/meminfo` and kernel PSI pressure metrics (`/proc/pressure/memory`), flagging `DegradedReason::MemoryPressureElevated` when 10-second stall percentages exceed 40.0%.
+- **Zero Daemon Overhead**: Root runs as an interactive foreground process or finite duration session, terminating immediately on `SIGINT` (Ctrl+C) or timeout. Zero resident background daemons.
+- **Concurrency Independence**: Mode C live monitoring does not acquire `schedule.lock`, allowing Mode B scheduled inspections and Mode C live monitoring to coexist without mutual locking contention.
+- **Privacy by Design**: File contents, developer credentials, tokens, session transcripts (`transcript.jsonl`), and process command-line arguments are never opened or logged.

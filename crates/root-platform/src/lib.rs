@@ -5,9 +5,10 @@ pub mod mock;
 pub mod traits;
 
 pub use linux::{
-    DesktopNotifier, DiscoveredEntry, LinuxAccountant, LinuxEnvironment, LinuxFilesystem,
-    LinuxProcess, LinuxScheduler, SkipReason, SystemdUnitGenerator, TraversalEvent,
-    TraversalMetrics, TraversalOptions, TraversalOutcome, ROOT_UNIT_MARKER,
+    DesktopNotifier, DiscoveredEntry, InotifyWatcher, LinuxAccountant, LinuxEnvironment,
+    LinuxFilesystem, LinuxMonitorSession, LinuxProcess, LinuxScheduler, MemoryObserver,
+    ProcessObserver, SkipReason, SystemdUnitGenerator, TraversalEvent, TraversalMetrics,
+    TraversalOptions, TraversalOutcome, ROOT_UNIT_MARKER,
 };
 pub use mock::MockPlatform;
 pub use traits::{

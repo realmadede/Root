@@ -2,6 +2,7 @@ pub mod capabilities;
 pub mod classification;
 pub mod finding;
 pub mod measurement;
+pub mod monitor;
 pub mod process;
 pub mod provenance;
 pub mod resource;
@@ -12,6 +13,10 @@ pub use classification::{ProposedAction, ProtectionTier, RejectionReason, Safety
 pub use finding::{FindingTarget, ScanFinding, ScanReport, ScanSummary};
 pub use measurement::{
     FilesystemUsage, MemoryMeasurement, PressureMetrics, StorageMeasurement, SystemMemorySummary,
+};
+pub use monitor::{
+    DegradedReason, LiveFsEvent, LiveFsEventKind, MemoryObservation, MonitorBudget, MonitorEvent,
+    MonitorScope, MonitorSessionState, MonitorSessionSummary, ProcessEventKind, ProcessObservation,
 };
 pub use process::{ProcessCandidate, ProcessIdentity, ProcessState};
 pub use provenance::{ConfidenceLevel, EvidenceProvenance, FindingEvidence};

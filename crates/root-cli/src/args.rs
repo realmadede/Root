@@ -109,6 +109,45 @@ pub enum Commands {
         #[command(subcommand)]
         command: ScheduleCommands,
     },
+
+    /// Lightweight live resource event monitoring (Mode C)
+    Monitor {
+        /// Explicit directory path(s) to monitor
+        #[arg(short, long, value_delimiter = ',')]
+        path: Vec<PathBuf>,
+
+        /// Restrict observation to a specific agent target (e.g. antigravity, claude)
+        #[arg(short, long)]
+        agent: Option<String>,
+
+        /// Enable lightweight process observation
+        #[arg(short = 'P', long, default_value_t = false)]
+        processes: bool,
+
+        /// Enable periodic memory snapshots
+        #[arg(short = 'M', long, default_value_t = false)]
+        memory: bool,
+
+        /// Sampling interval in seconds (default: 1.0)
+        #[arg(short, long, default_value_t = 1.0)]
+        interval: f64,
+
+        /// Maximum monitoring duration in seconds (optional session timeout)
+        #[arg(short, long)]
+        duration: Option<u64>,
+
+        /// Maximum queued events buffer limit
+        #[arg(long, default_value_t = 5000)]
+        max_events: usize,
+
+        /// Maximum inotify watch count limit
+        #[arg(long, default_value_t = 512)]
+        max_watches: usize,
+
+        /// Stream events as newline-delimited JSON (JSON Lines)
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
