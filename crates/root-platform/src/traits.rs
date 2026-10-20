@@ -1,8 +1,8 @@
 use root_core::{
     error::Result,
     model::{
-        MemoryMeasurement, PlatformCapabilities, PressureMetrics, ProcessCandidate,
-        ResourceMetadata, SystemMemorySummary,
+        FilesystemUsage, MemoryMeasurement, PlatformCapabilities, PressureMetrics,
+        ProcessCandidate, ResourceMetadata, SystemMemorySummary,
     },
 };
 use std::path::{Path, PathBuf};
@@ -27,6 +27,7 @@ pub trait FilesystemProvider: Send + Sync {
     fn read_dir(&self, path: &Path) -> Result<Vec<PathBuf>>;
     fn get_device_id(&self, path: &Path) -> Result<u64>;
     fn get_inode(&self, path: &Path) -> Result<u64>;
+    fn get_filesystem_usage(&self, path: &Path) -> Result<FilesystemUsage>;
 }
 
 /// Interface for read-only process inspection.

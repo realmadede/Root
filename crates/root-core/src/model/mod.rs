@@ -10,7 +10,7 @@ pub use capabilities::{CapabilityStatus, PlatformCapabilities};
 pub use classification::{ProposedAction, ProtectionTier, RejectionReason, SafetyDecision};
 pub use finding::{FindingTarget, ScanFinding, ScanReport, ScanSummary};
 pub use measurement::{
-    MemoryMeasurement, PressureMetrics, StorageMeasurement, SystemMemorySummary,
+    FilesystemUsage, MemoryMeasurement, PressureMetrics, StorageMeasurement, SystemMemorySummary,
 };
 pub use process::{ProcessCandidate, ProcessIdentity, ProcessState};
 pub use provenance::{ConfidenceLevel, EvidenceProvenance, FindingEvidence};

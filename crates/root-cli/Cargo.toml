@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+name = "root_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "root"
 path = "src/main.rs"
@@ -19,3 +23,9 @@ serde.workspace = true
 serde_json.workspace = true
 clap.workspace = true
 thiserror.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile.workspace = true

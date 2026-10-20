@@ -726,4 +726,10 @@ impl RuleRegistry {
         let rules = Self::all_rules();
         rules.into_iter().find(|rule| rule.matches(path_str))
     }
+
+    /// Retrieves a rule by its unique identifier.
+    pub fn get_rule(rule_id: &str) -> Option<DiscoveryRule> {
+        let rules = Self::all_rules();
+        rules.into_iter().find(|rule| rule.rule_id == rule_id)
+    }
 }

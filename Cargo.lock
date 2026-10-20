@@ -214,11 +214,13 @@ name = "root-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "libc",
  "root-core",
  "root-guardian",
  "root-platform",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
 ]
 

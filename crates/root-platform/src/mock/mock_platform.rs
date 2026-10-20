@@ -97,6 +97,16 @@ impl FilesystemProvider for MockPlatform {
     fn get_inode(&self, _path: &Path) -> Result<u64> {
         Ok(42)
     }
+
+    fn get_filesystem_usage(&self, _path: &Path) -> Result<root_core::model::FilesystemUsage> {
+        Ok(root_core::model::FilesystemUsage {
+            total_bytes: 1_000_000_000_000,
+            free_bytes: 500_000_000_000,
+            available_bytes: 450_000_000_000,
+            total_inodes: 60_000_000,
+            free_inodes: 50_000_000,
+        })
+    }
 }
 
 impl ProcessProvider for MockPlatform {

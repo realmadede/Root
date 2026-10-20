@@ -101,14 +101,21 @@ gantt
 
 ---
 
-### Phase 05: Command Line Interface (`root-cli`)
-- **Primary Goal**: Deliver a beautiful, deterministic terminal experience.
-- **Key Tasks**:
-  - CLI commands: `root scan`, `root status`, `root quarantine`, `root undo`, `root purge`.
-  - Interactive terminal UI: tabular columns, colored tier badges, progress bars, middle-truncated paths.
-  - JSON output format (`root scan --json`) for scripting and automation.
-  - Explicit confirmation prompts with explanatory risk summaries.
-- **Safety Gate**: No destructive action without explicit user confirmation flag (`--yes`).
+### Phase 05: Professional Command Line Interface & Resource Inspection Experience (`root-cli`)
+- **Status**: COMPLETE
+- **Primary Goal**: Deliver a polished, accessible, deterministic terminal inspection experience.
+- **Key Accomplishments**:
+  - Implemented modular CLI architecture cleanly separating argument parsing (`args.rs`), command dispatch (`lib.rs`), terminal formatting (`terminal.rs`), state persistence (`history.rs`), and interactive navigation (`interactive.rs`).
+  - Implemented `root status`: comprehensive system overview displaying OS, kernel release, invoking UID, available RAM, swap usage, PSI pressure indicators, supported targets, last scan activity, and current safety policy.
+  - Implemented `root inspect storage`: filesystem capacity via kernel `statvfs`, free blocks, inode counts, and directory allocation breakdown distinguishing apparent size from physical blocks, sparse files, and deduplicated multi-link storage.
+  - Implemented `root inspect transactions`: read-only diagnostic presentation of synthetic recovery journals, displaying chronological state transitions, SHA-256 hashes, and interrupted transaction detection.
+  - Implemented `root explain <resource-id>`: explainability engine detailing observed facts, matched discovery rules, evidence provenance, lifecycle uncertainty, protection tiers, and Guardian policy decisions.
+  - Implemented `root report`: consolidated diagnostic and audit report combining host health, storage capacity, discovery summaries, and security boundaries.
+  - Implemented `root discover --interactive`: read-only interactive terminal browser supporting index selection, text filtering, tier filtering, and sorting without heavy external TUI frameworks.
+  - Built terminal engine adhering to NO_COLOR specification, POSIX terminal width detection, tabular formatting, and middle truncation.
+  - Added strict guardrails prohibiting production mutation commands (`clean`, `quarantine`, `restore`, `delete`, `prune`), maintaining production read-only invariants.
+  - Expanded test suite with 6 Guardian security follow-up tests and 20 CLI integration tests, achieving 77 total passing tests across the workspace.
+- **Safety Gate**: Passed all 77 workspace tests; production CLI is strictly read-only; zero mutation commands enabled.
 
 ---
 

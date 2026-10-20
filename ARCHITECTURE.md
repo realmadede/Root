@@ -65,6 +65,17 @@ crates/
 ├── root-process/       # Process tree inspection, orphan detection, safe signaling
 ├── root-workspace/     # Git repository state, branch checking, project detectors
 ├── root-cli/           # Terminal UI, interactive prompts, formatted output
+│   ├── args.rs         # Clap argument parsing, subcommands, and flags
+│   ├── doctor.rs       # Platform audit and kernel interface diagnostics
+│   ├── status.rs       # Concise system overview, memory pressure, and scan history
+│   ├── scan.rs         # Directory artifact scanning with dry-run protection
+│   ├── discover.rs     # AI coding agent and toolchain footprint discovery
+│   ├── inspect.rs      # Subsystem inspection (memory, proc, storage statvfs, transaction journals)
+│   ├── explain.rs      # Explainability engine detailing provenance, uncertainty, and Guardian decisions
+│   ├── report.rs       # Consolidated diagnostic and audit reporting
+│   ├── interactive.rs  # Read-only interactive terminal navigation
+│   ├── terminal.rs     # NO_COLOR adherence, POSIX terminal width detection, tabular formatting
+│   └── history.rs      # XDG-compliant persistent scan history records
 ├── root-monitor/       # (Future) Lightweight inotify / cgroup event daemon
 └── root-gui/           # (Future) Native GNOME GTK4 + libadwaita desktop interface
 ```

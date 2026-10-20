@@ -107,3 +107,13 @@ pub struct PressureMetrics {
     /// Percentage of time all non-idle tasks were completely stalled waiting for memory (thrashing).
     pub full_10s_pct: f32,
 }
+
+/// Overall filesystem capacity, free space, and inode accounting from kernel statvfs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct FilesystemUsage {
+    pub total_bytes: u64,
+    pub free_bytes: u64,
+    pub available_bytes: u64,
+    pub total_inodes: u64,
+    pub free_inodes: u64,
+}

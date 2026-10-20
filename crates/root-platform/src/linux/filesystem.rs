@@ -491,6 +491,36 @@ impl FilesystemProvider for LinuxFilesystem {
         })?;
         Ok(meta.ino())
     }
+
+    fn get_filesystem_usage(&self, path: &Path) -> Result<root_core::model::FilesystemUsage> {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+
+        let c_path = CString::new(path.as_os_str().as_bytes())
+            .map_err(|e| RootError::InvalidPath(e.to_string()))?;
+        let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+        let res = unsafe { libc::statvfs(c_path.as_ptr(), &mut stat) };
+        if res != 0 {
+            return Err(RootError::Io {
+                path: path.to_path_buf(),
+                source: std::io::Error::last_os_error(),
+            });
+        }
+
+        let bsize = if stat.f_frsize > 0 {
+            stat.f_frsize as u64
+        } else {
+            stat.f_bsize as u64
+        };
+
+        Ok(root_core::model::FilesystemUsage {
+            total_bytes: stat.f_blocks as u64 * bsize,
+            free_bytes: stat.f_bfree as u64 * bsize,
+            available_bytes: stat.f_bavail as u64 * bsize,
+            total_inodes: stat.f_files as u64,
+            free_inodes: stat.f_ffree as u64,
+        })
+    }
 }
 
 impl LinuxFilesystem {

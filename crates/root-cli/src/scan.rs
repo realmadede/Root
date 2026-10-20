@@ -13,7 +13,12 @@ use root_platform::{
 };
 use std::path::{Path, PathBuf};
 
-pub fn run_scan(target_path: Option<PathBuf>, json_output: bool) -> Result<()> {
+pub fn run_scan(
+    target_path: Option<PathBuf>,
+    _dry_run: bool,
+    json_output: bool,
+    _interactive: bool,
+) -> Result<()> {
     let env = LinuxEnvironment::new();
     let fs = LinuxFilesystem::new();
     let accountant = LinuxAccountant::new();
@@ -66,6 +71,14 @@ pub fn run_scan(target_path: Option<PathBuf>, json_output: bool) -> Result<()> {
         summary,
         capabilities,
     };
+
+    let _ = crate::history::save_last_scan(
+        &scan_root,
+        report.summary.total_scanned,
+        report.findings.len(),
+        report.summary.is_complete,
+        "scan",
+    );
 
     if json_output {
         let json_str = serde_json::to_string_pretty(&report)

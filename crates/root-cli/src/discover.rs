@@ -18,6 +18,7 @@ pub fn run_discover(
     agent_filter: Option<String>,
     tool_filter: Option<String>,
     json_output: bool,
+    interactive: bool,
 ) -> Result<()> {
     let env = LinuxEnvironment::new();
     let fs = LinuxFilesystem::new();
@@ -188,12 +189,26 @@ pub fn run_discover(
             policy.evaluate(target, tier, action, uid)
         })?;
 
+    // Record last scan activity in persistent state
+    if let Some(first_root) = scan_roots.first() {
+        let _ = crate::history::save_last_scan(
+            first_root,
+            report.summary.total_inspected,
+            report.findings.len(),
+            report.summary.is_complete,
+            "discover",
+        );
+    }
+
     if json_output {
         let json_str = serde_json::to_string_pretty(&report)
             .map_err(|e| RootError::Serialization(e.to_string()))?;
         println!("{}", json_str);
     } else {
         render_discovery_terminal_report(&scan_roots, &report);
+        if interactive {
+            crate::interactive::run_interactive_browser(&report.findings);
+        }
     }
 
     Ok(())
