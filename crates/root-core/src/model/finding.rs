@@ -41,7 +41,7 @@ pub struct ScanFinding {
 }
 
 /// Consolidated metrics for a scan pass.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScanSummary {
     pub total_scanned: u64,
     pub protected_count: u64,
@@ -51,6 +51,40 @@ pub struct ScanSummary {
     pub non_actionable_count: u64,
     pub reclaimable_storage_bytes: u64,
     pub reclaimable_memory_pss_bytes: u64,
+
+    /// Number of resources skipped due to safety policies (e.g. symlinks, cross-device boundaries).
+    pub skipped_count: u64,
+    /// Number of entries that could not be accessed due to OS permission restrictions.
+    pub permission_denied_count: u64,
+    /// Number of entries that disappeared during the traversal (TOCTOU).
+    pub disappeared_count: u64,
+    /// Number of entries skipped due to unsupported filesystem features or pseudo-filesystems.
+    pub unsupported_count: u64,
+    /// Whether the scan completed its entire traversal without early termination.
+    pub is_complete: bool,
+    /// If incomplete, the operational justification (e.g. max entries limit, timeout).
+    pub incomplete_reason: Option<String>,
+}
+
+impl Default for ScanSummary {
+    fn default() -> Self {
+        Self {
+            total_scanned: 0,
+            protected_count: 0,
+            confirm_required_count: 0,
+            transient_count: 0,
+            recoverable_count: 0,
+            non_actionable_count: 0,
+            reclaimable_storage_bytes: 0,
+            reclaimable_memory_pss_bytes: 0,
+            skipped_count: 0,
+            permission_denied_count: 0,
+            disappeared_count: 0,
+            unsupported_count: 0,
+            is_complete: true,
+            incomplete_reason: None,
+        }
+    }
 }
 
 /// Complete report of a scan pass.

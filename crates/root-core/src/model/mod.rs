@@ -6,7 +6,7 @@ pub mod process;
 pub mod provenance;
 pub mod resource;
 
-pub use capabilities::PlatformCapabilities;
+pub use capabilities::{CapabilityStatus, PlatformCapabilities};
 pub use classification::{ProposedAction, ProtectionTier, RejectionReason, SafetyDecision};
 pub use finding::{FindingTarget, ScanFinding, ScanReport, ScanSummary};
 pub use measurement::{

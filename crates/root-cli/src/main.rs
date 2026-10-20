@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 mod doctor;
+mod inspect;
 mod scan;
 
 #[derive(Parser)]
@@ -28,9 +29,36 @@ enum Commands {
         #[arg(short, long)]
         path: Option<PathBuf>,
 
-        /// Dry-run simulation (mandated in Phase 01)
+        /// Dry-run simulation (mandated in Phase 02)
         #[arg(long, default_value_t = true)]
         dry_run: bool,
+
+        /// Output results as structured JSON
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+
+    /// Inspect Linux platform resources, memory distribution, or running processes
+    Inspect {
+        #[command(subcommand)]
+        target: InspectCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum InspectCommands {
+    /// Inspect host RAM, swap accounting, and PSI memory pressure stalls
+    Memory {
+        /// Output results as structured JSON
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+
+    /// Enumerate and inspect running processes via /proc with privacy protections
+    Processes {
+        /// Restrict inspection to processes owned by the current invoking user
+        #[arg(long, default_value_t = false)]
+        user_only: bool,
 
         /// Output results as structured JSON
         #[arg(long, default_value_t = false)]
@@ -48,6 +76,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Scan { path, json, .. } => {
             scan::run_scan(path, json)?;
         }
+        Commands::Inspect { target } => match target {
+            InspectCommands::Memory { json } => {
+                inspect::run_inspect_memory(json)?;
+            }
+            InspectCommands::Processes { user_only, json } => {
+                inspect::run_inspect_processes(user_only, json)?;
+            }
+        },
     }
 
     Ok(())

@@ -14,11 +14,22 @@ impl LinuxProcess {
         Self
     }
 
-    fn parse_stat_line(stat_content: &str) -> Option<(u32, String, ProcessState, u32, i32, u64)> {
-        // /proc/[pid]/stat format:
-        // pid (comm) state ppid pgrp session tty_nr ... starttime ...
+    /// Parses the `/proc/[pid]/stat` line defensively.
+    ///
+    /// Linux `/proc/[pid]/stat` format:
+    /// `pid (comm) state ppid pgrp session tty_nr ... starttime ...`
+    ///
+    /// The process name (`comm`) is enclosed in parentheses and may contain spaces or parens.
+    /// We use `find('(')` and `rfind(')')` to safely isolate `comm`.
+    pub fn parse_stat_line(
+        stat_content: &str,
+    ) -> Option<(u32, String, ProcessState, u32, i32, u64)> {
         let open_paren = stat_content.find('(')?;
         let close_paren = stat_content.rfind(')')?;
+
+        if open_paren >= close_paren {
+            return None;
+        }
 
         let pid: u32 = stat_content[..open_paren].trim().parse().ok()?;
         let comm = stat_content[open_paren + 1..close_paren].to_string();
@@ -39,7 +50,8 @@ impl LinuxProcess {
         Some((pid, comm, state, ppid, tty_nr, start_time_ticks))
     }
 
-    fn parse_status_uid(status_content: &str) -> Option<u32> {
+    /// Extracts real UID from `/proc/[pid]/status`.
+    pub fn parse_status_uid(status_content: &str) -> Option<u32> {
         for line in status_content.lines() {
             if let Some(rest) = line.strip_prefix("Uid:") {
                 let parts: Vec<&str> = rest.split_whitespace().collect();
@@ -49,6 +61,58 @@ impl LinuxProcess {
             }
         }
         None
+    }
+
+    /// Privacy-preserving command-line sanitizer.
+    ///
+    /// Avoids storing sensitive command-line parameters, tokens, or environment data.
+    /// Truncates to a maximum of 5 arguments and redacts tokens containing `=` or credentials.
+    pub fn sanitize_cmdline(raw_args: &[String]) -> Vec<String> {
+        let mut sanitized = Vec::new();
+        let sensitive_keys = [
+            "token",
+            "secret",
+            "key",
+            "password",
+            "auth",
+            "credential",
+            "api-key",
+        ];
+
+        let mut redact_next = false;
+        for (idx, arg) in raw_args.iter().enumerate() {
+            if idx >= 5 {
+                sanitized.push("[TRUNCATED]".to_string());
+                break;
+            }
+
+            if redact_next {
+                sanitized.push("[REDACTED]".to_string());
+                redact_next = false;
+                continue;
+            }
+
+            let lower = arg.to_lowercase();
+            if sensitive_keys.iter().any(|k| lower.contains(k)) {
+                if arg.contains('=') {
+                    sanitized.push("[REDACTED]".to_string());
+                } else {
+                    sanitized.push(arg.clone());
+                    redact_next = true;
+                }
+                continue;
+            }
+
+            if arg.contains('=') {
+                // If it looks like an environment assignment or key=value parameter
+                let parts: Vec<&str> = arg.splitn(2, '=').collect();
+                sanitized.push(format!("{}=[REDACTED]", parts[0]));
+            } else {
+                sanitized.push(arg.clone());
+            }
+        }
+
+        sanitized
     }
 }
 
@@ -72,6 +136,7 @@ impl ProcessProvider for LinuxProcess {
     }
 
     fn get_process_memory(&self, pid: u32) -> Result<Option<MemoryMeasurement>> {
+        // Attempt fast PSS/USS lookup via /proc/[pid]/smaps_rollup
         let smaps_rollup_path = format!("/proc/{}/smaps_rollup", pid);
         if let Ok(content) = fs::read_to_string(&smaps_rollup_path) {
             let mut rss_kb = 0u64;
@@ -103,7 +168,7 @@ impl ProcessProvider for LinuxProcess {
             )));
         }
 
-        // Fallback to /proc/[pid]/status
+        // Fallback to /proc/[pid]/status for VmRSS and VmSwap
         let status_path = format!("/proc/{}/status", pid);
         if let Ok(content) = fs::read_to_string(&status_path) {
             let mut vmrss_kb = 0u64;
@@ -139,7 +204,7 @@ impl ProcessProvider for LinuxProcess {
         let stat_path = format!("/proc/{}/stat", pid);
         let stat_content = match fs::read_to_string(&stat_path) {
             Ok(c) => c,
-            Err(_) => return Ok(None), // Process exited or permission denied
+            Err(_) => return Ok(None), // Process disappeared or permission denied
         };
 
         let (pid, comm, state, ppid, tty_nr, start_time_ticks) =
@@ -155,8 +220,9 @@ impl ProcessProvider for LinuxProcess {
             .or_else(|| fs::metadata(&stat_path).ok().map(|m| m.uid()))
             .unwrap_or(1000);
 
+        // Read raw commandline, sanitize for privacy, and redact potential secrets
         let cmdline_path = format!("/proc/{}/cmdline", pid);
-        let cmdline: Vec<String> = fs::read(&cmdline_path)
+        let raw_cmdline: Vec<String> = fs::read(&cmdline_path)
             .ok()
             .map(|bytes| {
                 bytes
@@ -166,6 +232,8 @@ impl ProcessProvider for LinuxProcess {
                     .collect()
             })
             .unwrap_or_default();
+
+        let cmdline = Self::sanitize_cmdline(&raw_cmdline);
 
         let exe_path = format!("/proc/{}/exe", pid);
         let executable = fs::read_link(&exe_path).ok();
@@ -177,7 +245,8 @@ impl ProcessProvider for LinuxProcess {
         let is_reparented_to_init = ppid == 1;
 
         // Multi-factor abandonment corroboration:
-        // Must be:
+        // A process is not considered abandoned merely because PPID == 1.
+        // It must satisfy multi-factor evidence:
         // 1. Reparented to PID 1
         // 2. Detached from controlling terminal (tty_nr == 0)
         // 3. Match known development server, LSP, or agent process signature
@@ -186,7 +255,7 @@ impl ProcessProvider for LinuxProcess {
             || comm.contains("rust-analyzer")
             || comm.contains("tsserver")
             || comm.contains("vite")
-            || cmdline.iter().any(|arg| {
+            || raw_cmdline.iter().any(|arg| {
                 arg.contains("vite")
                     || arg.contains("tsserver")
                     || arg.contains("language-server")
@@ -196,20 +265,23 @@ impl ProcessProvider for LinuxProcess {
 
         let is_abandoned = is_reparented_to_init && tty_nr == 0 && is_dev_signature;
 
-        let associated_agent = if cmdline.iter().any(|a| a.contains("antigravity")) {
+        let associated_agent = if raw_cmdline.iter().any(|a| a.contains("antigravity")) {
             Some("Google Antigravity".to_string())
-        } else if cmdline.iter().any(|a| a.contains("claude")) {
+        } else if raw_cmdline.iter().any(|a| a.contains("claude")) {
             Some("Claude Code".to_string())
         } else if comm.contains("rust-analyzer")
-            || cmdline.iter().any(|a| a.contains("rust-analyzer"))
+            || raw_cmdline.iter().any(|a| a.contains("rust-analyzer"))
         {
             Some("Rust Analyzer".to_string())
-        } else if comm.contains("tsserver") || cmdline.iter().any(|a| a.contains("tsserver")) {
+        } else if comm.contains("tsserver") || raw_cmdline.iter().any(|a| a.contains("tsserver")) {
             Some("TypeScript Server".to_string())
         } else {
             None
         };
 
+        // Process identity composite: combining PID with start_time_ticks and real_uid
+        // provides robust protection against PID recycling attacks.
+        // In future phases, pidfd_open will pin the process descriptor directly.
         let identity = ProcessIdentity {
             pid,
             ppid,

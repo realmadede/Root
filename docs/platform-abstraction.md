@@ -190,3 +190,34 @@ pub trait EnvironmentProvider: Send + Sync {
 
 1. **CLI and Core Portability**: The CLI application (`root-cli`) can run on headless Linux servers, minimal CI environments, and non-GNOME desktops (such as KDE, Hyprland, or Sway) without pulling in display libraries.
 2. **GUI Encapsulation**: The future `root-gui` crate links to `root-core` via standard Rust library calls, presenting GTK4/Adwaita views over deterministic data structs.
+
+---
+
+## 4. Phase 02 Linux Platform Engine Architecture
+
+Root's Linux engine (`root-platform`) implements concrete, unprivileged interfaces for filesystem traversal, process inspection, memory accounting, and empirical capability probing.
+
+### 4.1 Empirical Capability Detection
+Rather than inferring feature availability from kernel version strings, Root performs non-destructive, read-only empirical probes distinguishing four operational states:
+
+1. **`SupportedAndAccessible`**: The interface exists, syscall succeeds (or returns expected parameter validation error), and is readable by unprivileged user space.
+2. **`PermissionRestricted`**: The interface or syscall exists in the kernel, but access is blocked by POSIX file permissions, seccomp filters, or user namespace restrictions (`EPERM` / `EACCES`).
+3. **`Unavailable`**: The kernel lacks the subsystem, the syscall is not implemented (`ENOSYS`), or the pseudo-filesystem is unmounted.
+4. **`NotTested`**: The capability check was intentionally omitted or deferred.
+
+Tested subsystems include `/proc`, `/proc/meminfo`, `/proc/pressure/memory` (PSI), `/proc/[pid]/smaps_rollup`, cgroups v2 (`/sys/fs/cgroup`), `pidfd_open` (syscall 434), `openat2` (syscall 437), and `statx` (syscall 332).
+
+### 4.2 Defensive Filesystem Traversal Guarantees
+Filesystem traversal (`LinuxFilesystem::traverse`) enforces strict safety invariants:
+- **Symlink Non-Follow Invariant**: Symlinks are examined via `lstat` / `symlink_metadata` and never followed.
+- **Filesystem Boundary Invariant**: Cross-device descents (`st_dev != root_dev`) are skipped by default, preventing traversal into foreign mounts.
+- **Cycle Protection**: Visited directories are tracked by `(st_dev, st_ino)` in a hash set, eliminating infinite loops from hard-link graphs or mount cycles.
+- **Depth and Entry Bounding**: Configurable limits (default depth 64, max entries 250,000, 30s timeout) halt execution safely before memory exhaustion or stack overflows can occur.
+- **Pseudo-Filesystem Exclusion**: Paths in `/proc`, `/sys`, `/dev`, and `/run` are rejected by default.
+- **Completeness Reporting**: Scans that encounter depth limits, timeouts, or entry limits are explicitly reported as `is_complete: false` with operational justifications.
+
+### 4.3 Process and Memory Inspection Semantics
+- **Composite Process Identity**: Processes are tracked using `(pid, start_time_ticks, real_uid)` to protect against PID recycling attacks before `pidfd` descriptor pinning is engaged in Phase 04.
+- **Abandonment Corroboration**: A process reparented to PID 1 is never classified as abandoned without corroborating factors: controlling terminal detachment (`tty_nr == 0`) and matching development signatures.
+- **Command-Line Privacy**: Process command lines are sanitized to redact credentials, tokens, and sensitive flags before serialization or display.
+- **Proportional Memory Accounting**: Memory metrics utilize proportional sharing (`smaps_rollup` PSS) where accessible, warning against naive summation of raw RSS values.

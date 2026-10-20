@@ -246,8 +246,10 @@ dependencies = [
 name = "root-platform"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "root-core",
  "serde",
+ "tempfile",
  "thiserror",
 ]
 

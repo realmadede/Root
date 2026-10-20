@@ -55,15 +55,16 @@ gantt
 
 ---
 
-### Phase 02: Linux Platform Engine (`root-platform-linux`)
+### Phase 02: Linux Platform Engine (`root-platform`) — COMPLETED
 - **Primary Goal**: Implement safe, unprivileged Linux kernel interfaces.
-- **Key Tasks**:
-  - Implement `/proc` parser: `/proc/meminfo`, `/proc/[pid]/smaps_rollup` (PSS/USS calculation).
-  - Implement safe process signaling via `pidfd_open(2)` and `pidfd_send_signal(2)`.
-  - Implement filesystem traversal engine using `openat2` with `RESOLVE_BENEATH` and `RESOLVE_NO_SYMLINKS`.
-  - Implement `st_dev` mount boundary checks and `st_nlink` multi-link detection.
-  - Implement cgroups v2 user slice reader (`/sys/fs/cgroup/user.slice/...`).
-- **Safety Gate**: Verified in Level 2 rootless containers; PID reuse test suite passes.
+- **Key Accomplishments**:
+  - Implemented `/proc` parsing: `/proc/meminfo`, `/proc/[pid]/stat`, `/proc/[pid]/status`, and `/proc/[pid]/smaps_rollup` (PSS/USS calculation).
+  - Implemented empirical capability probing for `/proc`, `/proc/meminfo`, PSI, `smaps_rollup`, cgroups v2, `pidfd_open`, `openat2`, and `statx` across 4 operational states.
+  - Implemented defensive, bounded filesystem traversal engine (`LinuxFilesystem::traverse`) enforcing symlink non-follow, cross-device boundaries, cycle detection, depth limits (64), entry limits (250,000), and completeness reporting.
+  - Implemented privacy-safe process command-line sanitization with credential and token redaction.
+  - Implemented CLI inspection commands: `root inspect memory` and `root inspect processes`.
+  - Upheld Root Guardian Phase 02 read-only policy: all file mutations and process signaling permanently prohibited.
+- **Safety Gate**: Passed 25 workspace tests; zero host file mutation; memory and capability detection verified.
 
 ---
 

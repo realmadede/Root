@@ -1,6 +1,6 @@
 use root_core::{
     error::Result,
-    model::{PlatformCapabilities, PressureMetrics, SystemMemorySummary},
+    model::{CapabilityStatus, PlatformCapabilities, PressureMetrics, SystemMemorySummary},
 };
 use std::{fs, os::unix::fs::MetadataExt, path::Path};
 
@@ -14,19 +14,133 @@ impl LinuxAccountant {
         Self
     }
 
-    fn parse_kernel_version() -> (String, u32, u32) {
+    fn parse_kernel_version() -> String {
         if let Ok(release) = fs::read_to_string("/proc/sys/kernel/osrelease") {
-            let release = release.trim();
-            let mut parts = release.split('.');
-            let major: u32 = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
-            let minor: u32 = parts
-                .next()
-                .and_then(|p| p.split(&['-', '+'][..]).next())
-                .and_then(|p| p.parse().ok())
-                .unwrap_or(0);
-            return (release.to_string(), major, minor);
+            return release.trim().to_string();
         }
-        ("Unknown".to_string(), 0, 0)
+        "Unknown".to_string()
+    }
+
+    #[cfg(target_os = "linux")]
+    fn probe_file_access(path: &str) -> CapabilityStatus {
+        match fs::File::open(path) {
+            Ok(_) => CapabilityStatus::SupportedAndAccessible,
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::PermissionDenied => CapabilityStatus::PermissionRestricted,
+                std::io::ErrorKind::NotFound => CapabilityStatus::Unavailable,
+                _ => CapabilityStatus::Unavailable,
+            },
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn probe_dir_access(path: &str) -> CapabilityStatus {
+        match fs::read_dir(path) {
+            Ok(_) => CapabilityStatus::SupportedAndAccessible,
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::PermissionDenied => CapabilityStatus::PermissionRestricted,
+                std::io::ErrorKind::NotFound => CapabilityStatus::Unavailable,
+                _ => CapabilityStatus::Unavailable,
+            },
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn probe_cgroups_v2() -> CapabilityStatus {
+        let controllers_path = "/sys/fs/cgroup/cgroup.controllers";
+        if Path::new(controllers_path).exists() {
+            return Self::probe_file_access(controllers_path);
+        }
+
+        // Secondary check: verify filesystem magic of /sys/fs/cgroup
+        unsafe {
+            let mut statbuf: libc::statfs = std::mem::zeroed();
+            let c_path = std::ffi::CString::new("/sys/fs/cgroup").unwrap();
+            if libc::statfs(c_path.as_ptr(), &mut statbuf) == 0 {
+                // 0x63677270 is CGROUP2_SUPER_MAGIC
+                if statbuf.f_type == 0x63677270 {
+                    return CapabilityStatus::SupportedAndAccessible;
+                }
+            }
+        }
+
+        CapabilityStatus::Unavailable
+    }
+
+    #[cfg(target_os = "linux")]
+    fn probe_pidfd_syscall() -> CapabilityStatus {
+        // Empirically probe pidfd_open(-1, 0).
+        // If supported, the kernel returns EINVAL or ESRCH.
+        // If unsupported or blocked by seccomp, returns ENOSYS or EPERM.
+        unsafe {
+            let res = libc::syscall(libc::SYS_pidfd_open, -1i32, 0u32);
+            if res >= 0 {
+                // Should not happen for PID -1, but if it did, close it
+                libc::close(res as i32);
+                CapabilityStatus::SupportedAndAccessible
+            } else {
+                let err = *libc::__errno_location();
+                match err {
+                    libc::EINVAL | libc::ESRCH => CapabilityStatus::SupportedAndAccessible,
+                    libc::EPERM | libc::EACCES => CapabilityStatus::PermissionRestricted,
+                    libc::ENOSYS => CapabilityStatus::Unavailable,
+                    _ => CapabilityStatus::Unavailable,
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn probe_openat2_syscall() -> CapabilityStatus {
+        // Empirically probe openat2(-1, null, null, 0).
+        // If supported, the kernel validates arguments and returns EFAULT or EINVAL.
+        // If unsupported or blocked by seccomp, returns ENOSYS or EPERM.
+        unsafe {
+            let res = libc::syscall(
+                libc::SYS_openat2,
+                -1i32,
+                std::ptr::null::<libc::c_void>(),
+                std::ptr::null::<libc::c_void>(),
+                0usize,
+            );
+            if res >= 0 {
+                libc::close(res as i32);
+                CapabilityStatus::SupportedAndAccessible
+            } else {
+                let err = *libc::__errno_location();
+                match err {
+                    libc::EFAULT | libc::EINVAL => CapabilityStatus::SupportedAndAccessible,
+                    libc::EPERM | libc::EACCES => CapabilityStatus::PermissionRestricted,
+                    libc::ENOSYS => CapabilityStatus::Unavailable,
+                    _ => CapabilityStatus::Unavailable,
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn probe_statx_syscall() -> CapabilityStatus {
+        unsafe {
+            let mut statxbuf: libc::statx = std::mem::zeroed();
+            let c_path = std::ffi::CString::new(".").unwrap();
+            let res = libc::statx(
+                libc::AT_FDCWD,
+                c_path.as_ptr(),
+                libc::AT_SYMLINK_NOFOLLOW,
+                0,
+                &mut statxbuf,
+            );
+            if res == 0 {
+                CapabilityStatus::SupportedAndAccessible
+            } else {
+                let err = *libc::__errno_location();
+                match err {
+                    libc::EPERM | libc::EACCES => CapabilityStatus::PermissionRestricted,
+                    libc::ENOSYS => CapabilityStatus::Unavailable,
+                    _ => CapabilityStatus::Unavailable,
+                }
+            }
+        }
     }
 }
 
@@ -38,6 +152,7 @@ impl ResourceAccountant for LinuxAccountant {
         let mut free_kb = 0u64;
         let mut cached_kb = 0u64;
         let mut buffers_kb = 0u64;
+        let mut sreclaimable_kb = 0u64;
         let mut swap_total_kb = 0u64;
         let mut swap_free_kb = 0u64;
 
@@ -50,6 +165,7 @@ impl ResourceAccountant for LinuxAccountant {
                     "MemFree:" => free_kb = parts[1].parse().unwrap_or(0),
                     "Cached:" => cached_kb = parts[1].parse().unwrap_or(0),
                     "Buffers:" => buffers_kb = parts[1].parse().unwrap_or(0),
+                    "SReclaimable:" => sreclaimable_kb = parts[1].parse().unwrap_or(0),
                     "SwapTotal:" => swap_total_kb = parts[1].parse().unwrap_or(0),
                     "SwapFree:" => swap_free_kb = parts[1].parse().unwrap_or(0),
                     _ => {}
@@ -57,10 +173,13 @@ impl ResourceAccountant for LinuxAccountant {
             }
         }
 
+        // Total reclaimable cache includes regular page cache, filesystem buffers, and slab reclaimable
+        let total_cached_bytes = (cached_kb + buffers_kb + sreclaimable_kb) * 1024;
+
         Ok(SystemMemorySummary {
             total_bytes: total_kb * 1024,
             available_bytes: avail_kb * 1024,
-            cached_bytes: (cached_kb + buffers_kb) * 1024,
+            cached_bytes: total_cached_bytes,
             free_bytes: free_kb * 1024,
             swap_total_bytes: swap_total_kb * 1024,
             swap_free_bytes: swap_free_kb * 1024,
@@ -117,20 +236,57 @@ impl ResourceAccountant for LinuxAccountant {
     }
 
     fn get_capabilities(&self) -> Result<PlatformCapabilities> {
-        let (kernel_version, major, minor) = Self::parse_kernel_version();
+        let kernel_version = Self::parse_kernel_version();
         let is_linux = cfg!(target_os = "linux");
 
-        // Linux 5.3+ supports pidfd_open
-        let has_pidfd = is_linux && (major > 5 || (major == 5 && minor >= 3));
-
-        // Linux 4.20+ supports PSI pressure
-        let has_cgroups_v2_psi = Path::new("/proc/pressure/memory").exists();
-
-        // Linux 4.14+ supports smaps_rollup
-        let has_smaps_rollup = Path::new("/proc/self/smaps_rollup").exists();
-
-        // Linux 5.6+ supports openat2
-        let has_openat2 = is_linux && (major > 5 || (major == 5 && minor >= 6));
+        let (
+            proc_fs,
+            proc_meminfo,
+            proc_pressure_memory,
+            proc_smaps_rollup,
+            cgroups_v2,
+            pidfd,
+            openat2,
+            statx,
+        ) = if is_linux {
+            #[cfg(target_os = "linux")]
+            {
+                (
+                    Self::probe_dir_access("/proc"),
+                    Self::probe_file_access("/proc/meminfo"),
+                    Self::probe_file_access("/proc/pressure/memory"),
+                    Self::probe_file_access("/proc/self/smaps_rollup"),
+                    Self::probe_cgroups_v2(),
+                    Self::probe_pidfd_syscall(),
+                    Self::probe_openat2_syscall(),
+                    Self::probe_statx_syscall(),
+                )
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                (
+                    CapabilityStatus::Unavailable,
+                    CapabilityStatus::Unavailable,
+                    CapabilityStatus::Unavailable,
+                    CapabilityStatus::Unavailable,
+                    CapabilityStatus::Unavailable,
+                    CapabilityStatus::Unavailable,
+                    CapabilityStatus::Unavailable,
+                    CapabilityStatus::Unavailable,
+                )
+            }
+        } else {
+            (
+                CapabilityStatus::Unavailable,
+                CapabilityStatus::Unavailable,
+                CapabilityStatus::Unavailable,
+                CapabilityStatus::Unavailable,
+                CapabilityStatus::Unavailable,
+                CapabilityStatus::Unavailable,
+                CapabilityStatus::Unavailable,
+                CapabilityStatus::Unavailable,
+            )
+        };
 
         let user_uid = fs::metadata("/proc/self").map(|m| m.uid()).unwrap_or(1000);
         let user_gid = fs::metadata("/proc/self").map(|m| m.gid()).unwrap_or(1000);
@@ -138,13 +294,17 @@ impl ResourceAccountant for LinuxAccountant {
         Ok(PlatformCapabilities {
             os_name: "Linux (Kali GNU/Linux Rolling)".to_string(),
             kernel_version,
-            has_pidfd,
-            has_cgroups_v2_psi,
-            has_smaps_rollup,
-            has_openat2,
             is_linux,
             user_uid,
             user_gid,
+            proc_fs,
+            proc_meminfo,
+            proc_pressure_memory,
+            proc_smaps_rollup,
+            cgroups_v2,
+            pidfd,
+            openat2,
+            statx,
         })
     }
 }

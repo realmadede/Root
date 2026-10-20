@@ -1,5 +1,5 @@
 use root_core::{
-    error::Result,
+    error::{Result, RootError},
     model::{
         FindingEvidence, FindingTarget, ProposedAction, ProtectionTier, ResourceCandidate,
         ResourceCategory, ResourceId, ResourceLocation, ScanFinding, ScanReport, ScanSummary,
@@ -8,8 +8,8 @@ use root_core::{
 };
 use root_guardian::GuardianPolicy;
 use root_platform::{
-    traits::{EnvironmentProvider, FilesystemProvider, ResourceAccountant},
-    LinuxAccountant, LinuxEnvironment, LinuxFilesystem,
+    traits::{EnvironmentProvider, ResourceAccountant},
+    DiscoveredEntry, LinuxAccountant, LinuxEnvironment, LinuxFilesystem, TraversalOptions,
 };
 use std::path::{Path, PathBuf};
 
@@ -36,18 +36,25 @@ pub fn run_scan(target_path: Option<PathBuf>, json_output: bool) -> Result<()> {
         (path, Some(fixture))
     };
 
-    let mut findings = Vec::new();
-    let mut summary = ScanSummary::default();
+    // Traversal options with defensive defaults (max 64 depth, 250k entries, no cross-device)
+    let options = TraversalOptions::default();
+    let outcome = fs.traverse(&scan_root, &options)?;
 
-    traverse_and_classify(
-        &fs,
-        &scan_root,
-        &scan_root,
-        current_uid,
-        &policy,
-        &mut findings,
-        &mut summary,
-    )?;
+    let mut findings = Vec::new();
+    let mut summary = ScanSummary {
+        total_scanned: outcome.metrics.total_inspected,
+        skipped_count: outcome.metrics.skipped_count,
+        permission_denied_count: outcome.metrics.permission_denied_count,
+        disappeared_count: outcome.metrics.disappeared_count,
+        unsupported_count: outcome.metrics.unsupported_count,
+        is_complete: outcome.metrics.is_complete,
+        incomplete_reason: outcome.metrics.incomplete_reason.clone(),
+        ..Default::default()
+    };
+
+    for entry in outcome.entries {
+        classify_and_record_entry(&entry, current_uid, &policy, &mut findings, &mut summary);
+    }
 
     let report = ScanReport {
         timestamp_epoch_secs: std::time::SystemTime::now()
@@ -62,7 +69,7 @@ pub fn run_scan(target_path: Option<PathBuf>, json_output: bool) -> Result<()> {
 
     if json_output {
         let json_str = serde_json::to_string_pretty(&report)
-            .map_err(|e| root_core::error::RootError::Serialization(e.to_string()))?;
+            .map_err(|e| RootError::Serialization(e.to_string()))?;
         println!("{}", json_str);
     } else {
         render_terminal_report(&scan_root, &report);
@@ -71,92 +78,67 @@ pub fn run_scan(target_path: Option<PathBuf>, json_output: bool) -> Result<()> {
     Ok(())
 }
 
-fn traverse_and_classify(
-    fs: &LinuxFilesystem,
-    _root: &Path,
-    current_dir: &Path,
+fn classify_and_record_entry(
+    entry: &DiscoveredEntry,
     current_uid: u32,
     policy: &GuardianPolicy,
     findings: &mut Vec<ScanFinding>,
     summary: &mut ScanSummary,
-) -> Result<()> {
-    let entries = match fs.read_dir(current_dir) {
-        Ok(e) => e,
-        Err(_) => return Ok(()),
-    };
+) {
+    let path_str = entry.path.to_string_lossy();
+    let (category, tier, action, explanation) =
+        classify_path(&path_str, entry.metadata.storage.bytes);
 
-    for path in entries {
-        let meta = match fs.symlink_metadata(&path) {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-
-        summary.total_scanned += 1;
-
-        let path_str = path.to_string_lossy();
-        let (category, tier, action, explanation) = classify_path(&path_str, meta.storage.bytes);
-
-        match tier {
-            ProtectionTier::StrictlyProtected => summary.protected_count += 1,
-            ProtectionTier::UserConfirmRequired => {
-                summary.confirm_required_count += 1;
-                summary.reclaimable_storage_bytes += meta.storage.bytes;
-            }
-            ProtectionTier::ObsoleteTransient => {
-                summary.transient_count += 1;
-                summary.reclaimable_storage_bytes += meta.storage.bytes;
-            }
-            ProtectionTier::SafeRecoverable => {
-                summary.recoverable_count += 1;
-                summary.reclaimable_storage_bytes += meta.storage.bytes;
-            }
-            ProtectionTier::NonActionable => summary.non_actionable_count += 1,
+    match tier {
+        ProtectionTier::StrictlyProtected => summary.protected_count += 1,
+        ProtectionTier::UserConfirmRequired => {
+            summary.confirm_required_count += 1;
+            summary.reclaimable_storage_bytes += entry.metadata.storage.bytes;
         }
-
-        let dev_id = fs.get_device_id(&path).unwrap_or(0);
-        let inode = fs.get_inode(&path).unwrap_or(0);
-
-        let location = ResourceLocation::new(path.clone(), None, dev_id, inode);
-        let id = ResourceId::from_path_and_inode(&path, dev_id, inode);
-
-        let candidate = ResourceCandidate {
-            id,
-            location,
-            category,
-            metadata: meta,
-            ownership: root_core::model::ResourceOwnership {
-                uid: current_uid,
-                gid: current_uid,
-                is_current_user: true,
-            },
-            associated_agent: None,
-        };
-
-        let target = FindingTarget::Filesystem(candidate);
-        let safety_decision = policy.evaluate(&target, tier, action, current_uid);
-
-        let finding = ScanFinding {
-            target,
-            protection_tier: tier,
-            proposed_action: action,
-            evidence_list: vec![FindingEvidence::inspection(
-                "Filesystem metadata and lexical pattern match",
-                root_core::model::ConfidenceLevel::HighConfidence,
-            )],
-            confidence: root_core::model::ConfidenceLevel::HighConfidence,
-            explanation,
-            safety_decision,
-        };
-
-        findings.push(finding);
-
-        // Recurse into directories (unless symlink)
-        if path.is_dir() && !path.is_symlink() {
-            let _ = traverse_and_classify(fs, _root, &path, current_uid, policy, findings, summary);
+        ProtectionTier::ObsoleteTransient => {
+            summary.transient_count += 1;
+            summary.reclaimable_storage_bytes += entry.metadata.storage.bytes;
         }
+        ProtectionTier::SafeRecoverable => {
+            summary.recoverable_count += 1;
+            summary.reclaimable_storage_bytes += entry.metadata.storage.bytes;
+        }
+        ProtectionTier::NonActionable => summary.non_actionable_count += 1,
     }
 
-    Ok(())
+    let location = ResourceLocation::new(entry.path.clone(), None, entry.dev, entry.ino);
+    let id = ResourceId::from_path_and_inode(&entry.path, entry.dev, entry.ino);
+
+    let candidate = ResourceCandidate {
+        id,
+        location,
+        category,
+        metadata: entry.metadata.clone(),
+        ownership: root_core::model::ResourceOwnership {
+            uid: entry.uid,
+            gid: entry.gid,
+            is_current_user: entry.uid == current_uid,
+        },
+        associated_agent: None,
+    };
+
+    let target = FindingTarget::Filesystem(candidate);
+    let safety_decision = policy.evaluate(&target, tier, action, current_uid);
+
+    let finding = ScanFinding {
+        target,
+        protection_tier: tier,
+        proposed_action: action,
+        evidence_list: vec![FindingEvidence::inspection(
+            "Filesystem metadata and lexical pattern match",
+            root_core::model::ConfidenceLevel::HighConfidence,
+        )],
+        confidence: root_core::model::ConfidenceLevel::HighConfidence,
+        explanation,
+        safety_decision,
+    };
+
+    findings.push(finding);
 }
 
 fn classify_path(
@@ -260,8 +242,20 @@ fn render_terminal_report(root_path: &Path, report: &ScanReport) {
     println!(" AUDIT SUMMARY METRICS");
     println!("==========================================================================================");
     println!(
-        "  Total Entities Scanned      : {:>10}",
+        "  Total Entities Inspected    : {:>10}",
         report.summary.total_scanned
+    );
+    println!(
+        "  Skipped (Safety Policies)   : {:>10}",
+        report.summary.skipped_count
+    );
+    println!(
+        "  Permission Denied Paths     : {:>10}",
+        report.summary.permission_denied_count
+    );
+    println!(
+        "  Disappeared During Scan     : {:>10}",
+        report.summary.disappeared_count
     );
     println!(
         "  Tier 1: Strictly Protected  : {:>10} (Excluded from recovery)",
@@ -288,7 +282,22 @@ fn render_terminal_report(root_path: &Path, report: &ScanReport) {
         format_bytes(report.summary.reclaimable_storage_bytes)
     );
     println!(
-        "\n  Guardian Policy Invariant   : ALL MUTATIONS REJECTED (Phase 01 Read-Only Enforcement)"
+        "  Scan Completeness Status    : {}",
+        if report.summary.is_complete {
+            "COMPLETE (100% of bounded tree traversed)".to_string()
+        } else {
+            format!(
+                "INCOMPLETE ({})",
+                report
+                    .summary
+                    .incomplete_reason
+                    .as_deref()
+                    .unwrap_or("Halted early")
+            )
+        }
+    );
+    println!(
+        "\n  Guardian Policy Invariant   : ALL MUTATIONS REJECTED (Phase 02 Read-Only Enforcement)"
     );
     println!("  Audit Conclusion            : 0 files moved. 0 files modified. Host completely untouched.");
     println!("==========================================================================================");

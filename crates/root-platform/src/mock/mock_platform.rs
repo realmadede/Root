@@ -167,13 +167,17 @@ impl ResourceAccountant for MockPlatform {
         Ok(PlatformCapabilities {
             os_name: "Mock OS".to_string(),
             kernel_version: "6.1.0-mock".to_string(),
-            has_pidfd: true,
-            has_cgroups_v2_psi: true,
-            has_smaps_rollup: true,
-            has_openat2: true,
             is_linux: true,
             user_uid: self.uid,
             user_gid: self.gid,
+            proc_fs: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            proc_meminfo: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            proc_pressure_memory: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            proc_smaps_rollup: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            cgroups_v2: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            pidfd: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            openat2: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            statx: root_core::model::CapabilityStatus::SupportedAndAccessible,
         })
     }
 }

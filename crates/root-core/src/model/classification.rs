@@ -57,6 +57,8 @@ pub enum ProposedAction {
 pub enum RejectionReason {
     /// Strict Phase 01 safety invariant: all destructive operations are disabled.
     Phase01ReadOnlyPolicy,
+    /// Strict Phase 02 safety invariant: all destructive operations and mutations are prohibited.
+    Phase02ReadOnlyPolicy,
     /// The resource is classified as Tier 1 (Strictly Protected).
     TierStrictlyProtected,
     /// Path resides in a protected location (e.g. system directory, SSH keys, user documents).

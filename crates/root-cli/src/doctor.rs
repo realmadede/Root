@@ -1,4 +1,4 @@
-use root_core::error::Result;
+use root_core::{error::Result, model::CapabilityStatus};
 use root_platform::{
     traits::{EnvironmentProvider, ResourceAccountant},
     LinuxAccountant, LinuxEnvironment,
@@ -36,23 +36,21 @@ pub fn run_doctor() -> Result<()> {
             .unwrap_or_else(|| "Not set".to_string())
     );
 
-    println!("\nLinux Kernel Interfaces & Safety Subsystems:");
+    println!("\nLinux Kernel Interfaces & Capability Status:");
+    print_cap_status("/proc virtual filesystem", caps.proc_fs);
+    print_cap_status("/proc/meminfo (memory accounting)", caps.proc_meminfo);
     print_cap_status(
-        "pidfd (Linux 5.3+ pidfd_open & 5.4+ pidfd_send_signal)",
-        caps.has_pidfd,
+        "/proc/pressure/memory (kernel PSI stalls)",
+        caps.proc_pressure_memory,
     );
     print_cap_status(
-        "cgroups v2 PSI (/proc/pressure/memory)",
-        caps.has_cgroups_v2_psi,
+        "/proc/[pid]/smaps_rollup (granular PSS/USS)",
+        caps.proc_smaps_rollup,
     );
-    print_cap_status(
-        "smaps_rollup (/proc/[pid]/smaps_rollup PSS/USS)",
-        caps.has_smaps_rollup,
-    );
-    print_cap_status(
-        "openat2 (Linux 5.6+ RESOLVE_BENEATH traversal)",
-        caps.has_openat2,
-    );
+    print_cap_status("cgroups v2 hierarchy (/sys/fs/cgroup)", caps.cgroups_v2);
+    print_cap_status("pidfd (pidfd_open & safe process pinning)", caps.pidfd);
+    print_cap_status("openat2 (RESOLVE_BENEATH traversal)", caps.openat2);
+    print_cap_status("statx (extended filesystem metadata)", caps.statx);
 
     println!("\nHost Memory Summary (Kernel Accounting):");
     println!(
@@ -85,18 +83,19 @@ pub fn run_doctor() -> Result<()> {
     }
 
     println!("\nActive Governance Phase:");
-    println!("  Phase Status     : Phase 01 (Core Models, Platform Traits, & Fixtures)");
+    println!("  Phase Status     : Phase 02 (Linux Platform Engine: Secure Filesystem, Process & Memory)");
     println!("  Safety Policy    : Strict Read-Only (Zero filesystem or process mutation)");
     println!("============================================================");
 
     Ok(())
 }
 
-fn print_cap_status(name: &str, supported: bool) {
-    let mark = if supported {
-        "SUPPORTED"
-    } else {
-        "UNAVAILABLE"
+fn print_cap_status(name: &str, status: CapabilityStatus) {
+    let mark = match status {
+        CapabilityStatus::SupportedAndAccessible => "SUPPORTED",
+        CapabilityStatus::PermissionRestricted => "RESTRICTED",
+        CapabilityStatus::Unavailable => "UNAVAILABLE",
+        CapabilityStatus::NotTested => "NOT TESTED",
     };
     println!("  [{:>11}] {}", mark, name);
 }
