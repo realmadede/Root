@@ -1,0 +1,21 @@
+[package]
+name = "root-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "root"
+path = "src/main.rs"
+
+[dependencies]
+root-core = { path = "../root-core" }
+root-platform = { path = "../root-platform" }
+root-guardian = { path = "../root-guardian" }
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+thiserror.workspace = true

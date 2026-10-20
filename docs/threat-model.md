@@ -63,32 +63,33 @@ flowchart TD
 
 ---
 
-### 3.3 Hard-Link Behaviors & Shared Inode Corruption
+### 3.3 Hard-Link Behaviors & Shared Inode Dynamics
 
 #### Threat:
 Modern package managers like `pnpm` optimize storage by hard-linking files from a central store (`~/.local/share/pnpm/store/`) into project `node_modules`. Multiple projects share the identical inode (`st_ino`).
-- If Root mutates or replaces a file in one project, all other projects sharing the hard link are silently corrupted.
-- If Root calculates storage freed by summing file sizes with `st_nlink > 1`, it reports wildly inaccurate reclaimed space.
+- **Clarification on Unlinking**: Unlinking a hard-link in Linux simply decrements `st_nlink`. The remaining hard links continue to reference intact, valid inode data without corruption.
+- **Genuine Inode Hazards**:
+  1. *In-place mutation*: Writing to or truncating a multi-linked file mutates the content across all other projects sharing the inode.
+  2. *False reclamation accounting*: Assuming that unlinking one hard-link frees disk space leads to misleading user reports, because data blocks are freed only when `st_nlink` reaches 0.
 
 #### Mitigation:
 1. **Inode Deduplication Tracking**: Root maintains a hash set of `(st_dev, st_ino)` pairs encountered during a scan pass.
 2. **Multi-Link Detection**: Any file with `st_nlink > 1` is flagged. Root never performs in-place mutations on multi-link files.
-3. **Accurate Accounting**: File size is counted toward reclaimed space only once per unique `(st_dev, st_ino)` pair.
+3. **Accurate Accounting**: File size is counted toward reclaimed space only once per unique `(st_dev, st_ino)` pair when all referencing entries are queued for removal.
 
 ---
 
-### 3.4 TOCTOU (Time-Of-Check to Time-Of-Use) Race Conditions
+### 3.4 TOCTOU (Time-Of-Check to Time-Of-Use) & Cross-Filesystem Realities
 
 #### Threat:
-A malicious script or rapid background job swaps a benign directory with a symlink or sensitive target between the moment Root scans it and the moment the user confirms quarantine:
-1. *Time of Check*: Root scans `project/cache` (empty directory).
-2. *Intervention*: Attacker runs `rm -rf project/cache && ln -s /etc project/cache`.
-3. *Time of Use*: Root moves `project/cache` into quarantine, affecting `/etc`.
+1. **Concurrent Filesystem Mutations**: A file or directory is modified, swapped with a symlink, or replaced between the scan phase and the quarantine phase.
+2. **Cross-Filesystem Movement Vulnerability**: When quarantine movement spans across filesystem boundaries (`EXDEV`), atomic `renameat2` is impossible. A copy-verify-unlink sequence is vulnerable to mid-operation crashes, leaving duplicated or partially written files.
+3. **Restoration Conflicts**: When restoring quarantined files (`root undo`), the original path may have been recreated by the user, leading to accidental overwrite of new work.
 
 #### Mitigation:
-1. **File Descriptor Operations (`openat`, `renameat2`)**: Root anchors operations to open directory descriptors (`dirfd`).
-2. **Pre-Quarantine Verification**: Immediately before quarantine movement, Root performs `fstatat(dirfd, ..., AT_SYMLINK_NOFOLLOW)` and verifies that `st_ino`, `st_dev`, and `st_mode` match the scan snapshot. If any attribute changed, the operation is aborted.
-3. **Atomic Renames**: Movement into quarantine utilizes `renameat2(..., RENAME_NOREPLACE)` to prevent accidental overwrites.
+1. **File Descriptor Verification**: Immediately before quarantine movement, Root inspects open descriptors and verifies `(st_dev, st_ino, st_mode, mtime)` against the scan snapshot.
+2. **Cross-Filesystem Transaction States**: Cross-device moves record an explicit three-state transaction: `Copying` -> `Verified` -> `SourceUnlinked`. In the event of an interruption, incomplete targets are automatically pruned.
+3. **Restoration Safety Guard**: Before `root undo` moves a quarantined item back, it verifies whether the target path exists. If occupied, restoration halts and alerts the user rather than overwriting.
 
 ---
 

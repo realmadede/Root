@@ -1,0 +1,23 @@
+[workspace]
+members = [
+    "crates/root-core",
+    "crates/root-platform",
+    "crates/root-guardian",
+    "crates/root-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = [" Madede <bagomwaraphael@gmail.com>", "Root Contributors"]
+license = "MIT"
+repository = "https://github.com/realmadede/Root"
+rust-version = "1.85"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+clap = { version = "4.5", features = ["derive"] }
+tempfile = "3.17"

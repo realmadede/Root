@@ -98,12 +98,12 @@ sequenceDiagram
 ```
 
 ### The 6 Stages:
-1. **Identification**: Scanners collect candidates and calculate PSS/USS or storage bytes.
+1. **Identification**: Scanners collect candidates and calculate PSS/USS or storage bytes. Verified facts (paths, metadata, inodes) are kept strictly separate from inferred classifications.
 2. **Classification**: `root-core` evaluates rules, assigning one of four tiers (`STRICTLY_PROTECTED`, `USER_CONFIRM_REQUIRED`, `OBSOLETE_TRANSIENT`, `SAFE_RECOVERABLE`).
-3. **Pre-Flight Validation**: `root-guardian` ensures paths do not cross mount boundaries, escape via symlinks, or violate git safety invariants.
+3. **Pre-Flight Validation**: `root-guardian` ensures paths do not cross mount boundaries, escape via symlinks, or violate git safety invariants. Ownership (UID/GID) and process/filesystem identities are independently validated.
 4. **Interactive Consent**: User reviews findings with transparent "Why" explanations; explicit confirmation required for non-transient items.
-5. **Atomic Quarantine**: Candidates are moved using `renameat2(RENAME_NOREPLACE)` into isolated quarantine storage.
-6. **Journaling**: `root-audit` records cryptographic hashes and path maps, guaranteeing complete reversibility via `root undo`.
+5. **Quarantine Movement**: Candidates are moved using `renameat2(RENAME_NOREPLACE)` on the same filesystem. For cross-filesystem operations, atomic rename is impossible; a verified copy-check-unlink transaction is required with complete metadata preservation.
+6. **Journaling & Recovery Tracking**: `root-audit` records cryptographic hashes, path maps, ownership, permissions, and timestamps. Note that recovery cannot be guaranteed in every circumstance (e.g. occupied destination, unmounted mounts, deleted parent trees).
 
 ---
 
@@ -112,3 +112,34 @@ sequenceDiagram
 - **Advisory File Lock**: Single-writer model via `$XDG_STATE_HOME/root/root.lock` (`flock`). Prevents conflicting concurrent mutations between CLI, scheduled timer, and GUI.
 - **Asynchronous Non-Blocking Scanning**: Traversal and `/proc` parsing run on dedicated worker threads using Rust's `tokio` or threadpools, streaming results to frontends via bounded channels with backpressure.
 - **Zero UI Freezing**: Frontends (CLI progress spinners and GTK main loops) are never blocked by filesystem I/O or process inspection.
+
+---
+
+## 5. Architectural Corrections & Physical Realities (Phase 01 Revisions)
+
+Phase 01 introduces seven foundational corrections to refine earlier Phase 00 assumptions against concrete operating system realities:
+
+1. **Cross-Filesystem Rename Non-Atomicity**:
+   - `renameat2(2)` fails with `EXDEV` across mount points or different filesystems.
+   - Moving data across filesystem boundaries requires a multi-step sequence (streaming copy -> verification of bytes/hashes -> unlinking source). This sequence is inherently non-atomic and vulnerable to power failure, disk exhaustion, or concurrent interference.
+2. **Quarantine Restoration Uncertainty**:
+   - Restoration (`root undo`) cannot be guaranteed under all circumstances. The original path may become occupied by new user files, parent directory trees may have been unlinked, permissions on parent directories may have changed, or destination filesystems may be unmounted or out of space.
+   - The transaction journal must explicitly support conflict detection and alternate recovery paths.
+3. **Hard Link Unlinking Semantics**:
+   - Unlinking a directory entry referencing a multi-linked inode (`st_nlink > 1`) decrements the link count and leaves all remaining hard links pointing to valid, intact data.
+   - Removing a hard link does **not** corrupt remaining links. The genuine risks are:
+     - Mutating a multi-linked file in-place (corrupts all other hard links referencing the same inode).
+     - Incorrectly assuming that unlinking one link frees storage (disk space is only freed when `st_nlink` reaches 0).
+4. **Process Parentage (PPID == 1) Nuances**:
+   - A process re-parented to PID 1 is **not** automatically abandoned.
+   - Daemons, systemd user services, background compilers, and detached interactive tasks (`nohup`, `tmux`, `daemon()`) legitimately have `PPID == 1`.
+   - Abandonment requires multi-factor corroboration: absence of controlling TTY, dead session leader, inactive IPC pipes, absence of parent agent sessions, and process lifetime heuristics.
+5. **Agent File Lifecycle Evidence**:
+   - Agent-generated files (scratchpads, worktrees, test directories) must **never** be classified as disposable without sufficient corroborating lifecycle evidence.
+   - Users may have edited files within agent scratchpads or saved intentional work. Deletion requires closed sessions, clean git trees, age thresholds, and explicit user consent.
+6. **Independent Identity and Ownership Validation**:
+   - Filesystem identity (`(st_dev, st_ino)` + canonical path + UID), process identity (PID + `starttime` + executable inode + UID + `pidfd`), and resource ownership must be independently authenticated before any action.
+   - Root strictly verifies UID match to prevent acting on resources belonging to other users.
+7. **Transactional Robustness & Metadata Preservation**:
+   - Any mutation must preserve complete metadata: POSIX file modes, ownership UID/GID (where permitted), timestamps (mtime, atime), and extended attributes (xattrs).
+   - The engine must gracefully abort and roll back if files are modified concurrently during execution.

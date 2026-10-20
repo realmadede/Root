@@ -107,11 +107,55 @@ Root implements a zero-data-loss architecture:
 - Default path: `~/.local/state/root/quarantine/`
 - Permissions: Enforced `0700` (readable and writable solely by the invoking user).
 
-### 5.2 Atomic Move Semantics
-- Quarantine movements use `renameat2(..., RENAME_NOREPLACE)` where possible on the same filesystem.
-- If moving across filesystem boundaries (`EXDEV`), Root performs a streaming copy followed by source verification (SHA256 check) before unlinking the source.
+### 5.2 Quarantine Movement & Cross-Filesystem Realities
+- **Same-Filesystem Moves**: When the target directory and the quarantine staging directory reside on the same filesystem (`target.st_dev == quarantine.st_dev`), Root uses `renameat2(..., RENAME_NOREPLACE)` for atomic movement.
+- **Cross-Filesystem Moves (`EXDEV`)**:
+  - Atomic rename is not supported across filesystem boundaries (`renameat2` returns `-EXDEV`).
+  - Cross-device movement requires a 3-step sequence: (1) full recursive copy preserving metadata (mode, timestamps, ownership), (2) cryptographic validation comparing SHA256 hashes and byte counts, and (3) recursive unlinking of the source.
+  - **Non-Atomicity Acknowledgment**: Cross-filesystem moves are inherently non-atomic. A system crash, power failure, or disk quota exhaustion mid-transfer can leave partial files. The transaction journal must record partial transfer states to enable clean recovery or rollback.
 
-### 5.3 Audit Rollback Journal
+### 5.3 Restoration Uncertainty & Conflict Management
+> [!WARNING]
+> Quarantine restoration (`root undo`) **cannot be guaranteed in every circumstance**.
+> Potential restoration failure modes:
+> 1. The original path has since been re-occupied by new user files or recreated directories.
+> 2. The enclosing parent directory tree was deleted or had its permissions changed (`EACCES`).
+> 3. The target filesystem is currently unmounted or mounted read-only (`EROFS`).
+> 4. The target volume has insufficient free disk space.
+> 
+> Root handles restoration conflicts gracefully: if the original path is occupied, Root halts restoration, presents a visual diff/conflict report, and offers to restore to an alternate location (`original_path.restored.<id>`).
+
+### 5.4 Hard Link Mechanics & Inode Safety
+- **Unlinking Mechanics**: Unlinking one directory entry referencing a multi-linked inode (`st_nlink > 1`) simply decrements the link count. The remaining links continue to reference intact, valid data.
+- **True Inode Hazards**:
+  1. *In-place mutation*: Writing to a hard-linked file mutates all other hard links referencing the same inode. Root strictly avoids in-place modification.
+  2. *Accounting error*: Deleting a file with `st_nlink > 1` does **not** free disk space because the inode and data blocks remain allocated until `st_nlink == 0`. Root does not report disk reclamation until the last link is scheduled for removal.
+
+### 5.5 Process Parentage & Abandonment Verification
+- A process with `PPID == 1` is **not automatically abandoned**.
+- Background user services (systemd user units), daemonized tools (`daemon()`, `nohup`), long-running build jobs, and terminal multiplexers (`tmux`, `screen`) legitimately run under PID 1.
+- Abandonment classification requires multi-factor corroboration:
+  - Process PPID is 1 AND controlling terminal (`/proc/[pid]/stat` field 7 `tty_nr`) is 0 (detached).
+  - Process executable matches known agent or ephemeral toolchain signatures.
+  - No active parent agent session or IDE session owns or tracks the process.
+  - Associated workspace or pipe sockets are closed or unlinked.
+
+### 5.6 Agent File Lifecycle Evidence
+- Agent-created artifacts (scratchpads, worktrees, test files) must **never** be treated as disposable without verifiable lifecycle evidence.
+- An agent directory is eligible for recovery only when:
+  1. The parent agent session has definitively closed and archived.
+  2. The workspace Git status is verified clean (`git status --porcelain` is empty).
+  3. No open file descriptors or active processes point to the directory.
+  4. The directory has been dormant past the configured retention window (default: 7 days).
+  5. The user gives explicit interactive confirmation (`USER_CONFIRM_REQUIRED`).
+
+### 5.7 Independent Identity and Ownership Validation
+- Filesystem identity, process identity, and user ownership must be validated independently:
+  - **Filesystem Identity**: Combination of `(st_dev, st_ino)`, canonical lexical path, and file type.
+  - **Process Identity**: Combination of PID, `starttime` ticks from `/proc/[pid]/stat`, binary executable inode (`/proc/[pid]/exe`), and `pidfd`.
+  - **Ownership Invariant**: Root strictly verifies that the resource's UID matches the invoking user's UID (`st_uid == getuid()`). Root never touches, modifies, or signals resources owned by other users or the system.
+
+### 5.8 Audit Rollback Journal
 - Every quarantine operation writes an entry into `$XDG_STATE_HOME/root/audit/journal.jsonl`:
   ```json
   {

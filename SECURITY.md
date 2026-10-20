@@ -17,11 +17,13 @@ Root is designed from the ground up as a **zero-elevated-privilege utility**.
 | Domain | Invariant Enforced by Root |
 |---|---|
 | **Filesystem Traversal** | Uses `lstat` and `openat2` with `RESOLVE_BENEATH` and `RESOLVE_NO_SYMLINKS`. Traversal never escapes designated target roots or follows untrusted symlinks. |
-| **Mount Points** | Validates filesystem device IDs (`st_dev`). Traversal immediately halts at mount boundaries, preventing escapes onto foreign filesystems or pseudo-filesystems. |
-| **Hard Links** | Detects multi-linked inodes (`st_nlink > 1`). Root never modifies or corrupts shared hard-link graphs (such as pnpm stores). |
+| **Mount Points & Cross-FS** | Validates filesystem device IDs (`st_dev`). Halts traversal at mount boundaries. Acknowledges that cross-filesystem renames are non-atomic and enforces verified multi-step copies with rollback journals. |
+| **Ownership Verification** | Independently validates `st_uid == getuid()` and process UID. Root strictly ignores resources owned by other users or the operating system. |
+| **Hard Links** | Correctly distinguishes between in-place mutation hazards and safe unlinking. Tracks `st_nlink > 1` for accurate reclaimed space calculation without modifying shared graphs. |
+| **Process Identity** | Validates multi-factor process identity (PID, `starttime`, executable inode, UID, `pidfd`). Recognizes that `PPID == 1` is not synonymous with abandonment. |
 | **Process Signaling** | Signals are dispatched exclusively via Linux 5.4+ `pidfd_send_signal`, eliminating PID reuse race conditions. |
 | **Code Execution** | Root never executes scripts, package managers, or compilers located in scanned directories (no `npm run clean`, no `cargo clean`). |
-| **Reversibility** | Deletions are executed as atomic movements into a secure local quarantine (`~/.local/state/root/quarantine/`, permissions `0700`) with cryptographic rollback journaling. |
+| **Reversibility & Conflicts** | Deletions are executed as movements into a secure local quarantine (`~/.local/state/root/quarantine/`, permissions `0700`) with cryptographic rollback journaling. Restoration conflicts are detected and safeguarded against accidental overwrites. |
 
 For the full architectural threat model, see [docs/threat-model.md](docs/threat-model.md).
 
