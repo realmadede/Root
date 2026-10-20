@@ -83,8 +83,8 @@ pub fn run_doctor() -> Result<()> {
     }
 
     println!("\nActive Governance Phase:");
-    println!("  Phase Status     : Phase 02 (Linux Platform Engine: Secure Filesystem, Process & Memory)");
-    println!("  Safety Policy    : Strict Read-Only (Zero filesystem or process mutation)");
+    println!("  Phase Status     : Phase 04 (Guardian Security Engine & Quarantine Rollback)");
+    println!("  Safety Policy    : Production Read-Only (Quarantine & Rollback Isolated to Synthetic Fixtures)");
     println!("============================================================");
 
     Ok(())

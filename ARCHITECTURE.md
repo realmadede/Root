@@ -166,3 +166,36 @@ flowchart TD
 - **Uncertainty Resolves to Protection**: Any resource with inconclusive evidence, recent modification (<1h), or conflicting ownership is categorized as `Unknown` / `StrictlyProtected` and preserved in place.
 - **Zero Content Inspection**: Discovery operates solely on path structure, file attributes, inode metadata, and process table telemetry. File contents, conversation histories, tokens, and encryption keys are strictly ignored.
 - **Shared Package Store Safety**: Content-addressable package stores using hard links across projects (pnpm) are identified as `StrictlyProtected` with `ProposedAction::Ignore` to prevent workspace corruption.
+
+---
+
+## 7. Guardian Security Engine & Quarantine Rollback (Phase 04)
+
+Phase 04 establishes the core transaction and rollback mechanics required for resource management, strictly constrained to isolated synthetic fixture sandboxes:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Proposed
+    Proposed --> Authorized: Guardian Policy Approval
+    Proposed --> Failed: Policy Denied
+    Authorized --> Prepared: Pre-Flight & SHA256 Snapshot
+    Authorized --> Failed: Inode/Device Mismatch
+    Prepared --> Quarantined: renameat2(RENAME_NOREPLACE)
+    Prepared --> Failed: Move Failure / Collision
+    Prepared --> RecoveryRequired: Interrupted Move
+    Quarantined --> Verified: Integrity & Unlink Verified
+    Quarantined --> RecoveryRequired: Hash / Size Mismatch
+    Verified --> Restored: RestorationEngine (Conflict Free)
+    Verified --> RecoveryRequired: Destination Occupied
+    RecoveryRequired --> Restored: Recovery Replay Success
+    RecoveryRequired --> Failed: Unrecoverable Anomaly
+    Restored --> [*]
+    Failed --> [*]
+```
+
+### Architectural Guarantees:
+- **Sandbox Boundary Enforcement**: Mutations are restricted to verified `FixtureSandbox` instances. Any attempt to touch files outside the sandbox returns an immediate `SandboxViolation`.
+- **Atomic Same-Filesystem Relocation**: Files are relocated via `SYS_renameat2` with `RENAME_NOREPLACE`. If the target destination already exists, the kernel prevents overwriting.
+- **Cross-Filesystem Safety**: Cross-device moves (`EXDEV`) are detected and rejected prior to mutation.
+- **Conflict-Aware Restoration**: Restoring a resource never overwrites an existing file at the original path. Destination collisions halt restoration, preserving the quarantined copy intact.
+- **Self-Contained Integrity Verification**: File integrity is verified using a pure-Rust SHA-256 implementation with zero third-party crate dependencies.

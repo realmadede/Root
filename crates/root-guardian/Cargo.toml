@@ -9,5 +9,10 @@ rust-version.workspace = true
 
 [dependencies]
 root-core = { path = "../root-core" }
+root-platform = { path = "../root-platform" }
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

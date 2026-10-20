@@ -15,6 +15,10 @@ impl ResourceId {
     pub fn from_path_and_inode(path: &Path, device_id: u64, inode: u64) -> Self {
         Self(format!("{}:{}:{}", path.display(), device_id, inode))
     }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 /// The architectural category of a filesystem resource.

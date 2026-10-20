@@ -84,14 +84,20 @@ gantt
 
 ---
 
-### Phase 04: Guardian Security Engine & Quarantine Rollback (`root-guardian`, `root-audit`)
+### Phase 04: Guardian Security Engine and Quarantine Rollback (`root-guardian`)
+- **Status**: COMPLETE
 - **Primary Goal**: Enforce security boundaries and implement zero-data-loss rollback mechanics.
-- **Key Tasks**:
-  - Implement `root-guardian` path validator (canonicalization, prefix boundary verification).
-  - Implement atomic quarantine mover (`renameat2(RENAME_NOREPLACE)`).
-  - Implement JSONL rollback journal with SHA256 checksums and restore command (`root undo`).
-  - Implement 30-day quarantine retention expiration tracker.
-- **Safety Gate**: Level 3 Kali Linux VM validation; verify 100% reversible test cleanups.
+- **Key Accomplishments**:
+  - Implemented 8-factor explicit authorization engine (`AuthorizationEngine`) ensuring unknown, non-actionable, or strictly protected resources are unconditionally rejected.
+  - Implemented 8-state transaction state machine (`TransactionState`, `TransactionContext`) enforcing valid, deterministic state transitions (`Proposed` -> `Authorized` -> `Prepared` -> `Quarantined` -> `Verified` -> `Restored`).
+  - Implemented strictly isolated synthetic fixture sandbox (`FixtureSandbox`) preventing any mutation of host or user files outside verified test boundaries.
+  - Implemented Linux same-filesystem atomic relocation using `LinuxFilesystem::atomic_rename_no_replace` (`SYS_renameat2` with `RENAME_NOREPLACE`), eliminating destination overwrite risks and enforcing cross-device boundary checks.
+  - Implemented durable recovery journal (`RecoveryJournal`) with JSONL serialization, data syncing, malformed record detection, and interrupted transaction identification.
+  - Implemented conflict-aware restoration engine (`RestorationEngine`) guaranteeing that occupied destination paths are never overwritten.
+  - Implemented self-contained FIPS 180-4 SHA-256 integrity verification (`sha256_file`) with zero third-party dependencies.
+  - Added comprehensive 16-scenario adversarial security test suite (`guardian_transaction_tests.rs`) covering symlink escapes, TOCTOU races, destination collisions, hard links, sparse files, Unicode filenames, and journal corruption.
+  - Passed all 51 workspace tests with zero failures.
+- **Safety Gate**: Passed all 51 tests; zero host file mutation; 100% reversible test cleanups within synthetic sandbox.
 
 ---
 

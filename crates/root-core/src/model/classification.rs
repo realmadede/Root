@@ -79,6 +79,12 @@ pub enum RejectionReason {
     UnknownResource,
     /// Invalid, malformed, or unsafe lexical path.
     InvalidPath,
+    /// Explicit interactive user confirmation was not provided for a Tier 2 resource.
+    UserConfirmationMissing,
+    /// The requested operation is unsupported in Phase 04.
+    Phase04UnsupportedAction,
+    /// Filesystem identity (device or inode) changed between authorization and execution.
+    FilesystemIdentityChanged,
 }
 
 /// The outcome of evaluating a candidate against Root Guardian safety policies.

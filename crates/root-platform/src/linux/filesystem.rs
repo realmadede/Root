@@ -492,3 +492,65 @@ impl FilesystemProvider for LinuxFilesystem {
         Ok(meta.ino())
     }
 }
+
+impl LinuxFilesystem {
+    /// Performs an atomic rename that fails if destination already exists (`RENAME_NOREPLACE`).
+    pub fn atomic_rename_no_replace(from: &Path, to: &Path) -> Result<()> {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+
+        let from_cstr = CString::new(from.as_os_str().as_bytes())
+            .map_err(|e| RootError::InvalidPath(e.to_string()))?;
+        let to_cstr = CString::new(to.as_os_str().as_bytes())
+            .map_err(|e| RootError::InvalidPath(e.to_string()))?;
+
+        let res = unsafe {
+            libc::syscall(
+                libc::SYS_renameat2,
+                libc::AT_FDCWD,
+                from_cstr.as_ptr(),
+                libc::AT_FDCWD,
+                to_cstr.as_ptr(),
+                libc::RENAME_NOREPLACE,
+            )
+        };
+
+        if res == 0 {
+            // Synchronize parent directories if possible
+            if let Some(parent) = to.parent() {
+                if let Ok(dir_file) = fs::File::open(parent) {
+                    let _ = dir_file.sync_all();
+                }
+            }
+            if let Some(parent) = from.parent() {
+                if let Ok(dir_file) = fs::File::open(parent) {
+                    let _ = dir_file.sync_all();
+                }
+            }
+            Ok(())
+        } else {
+            let err = std::io::Error::last_os_error();
+            match err.raw_os_error() {
+                Some(libc::EEXIST) => Err(RootError::DestinationCollision {
+                    path: to.to_path_buf(),
+                }),
+                Some(libc::EXDEV) => {
+                    let source_dev = from.metadata().map(|m| m.dev()).unwrap_or(0);
+                    let dest_dev = to
+                        .parent()
+                        .and_then(|p| p.metadata().ok())
+                        .map(|m| m.dev())
+                        .unwrap_or(0);
+                    Err(RootError::CrossDeviceUnsupported {
+                        source_dev,
+                        dest_dev,
+                    })
+                }
+                _ => Err(RootError::Io {
+                    path: from.to_path_buf(),
+                    source: err,
+                }),
+            }
+        }
+    }
+}

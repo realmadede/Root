@@ -42,6 +42,33 @@ pub enum RootError {
 
     #[error("Serialization error: {0}")]
     Serialization(String),
+
+    #[error("Transaction {tx_id} failed: {reason}")]
+    TransactionFailed { tx_id: String, reason: String },
+
+    #[error("Invalid transaction state transition from {from} to {to}")]
+    InvalidStateTransition { from: String, to: String },
+
+    #[error("Destination collision at {path:?}: file or directory already exists")]
+    DestinationCollision { path: PathBuf },
+
+    #[error("Cross-device operations unsupported: source device {source_dev} differs from destination device {dest_dev}")]
+    CrossDeviceUnsupported { source_dev: u64, dest_dev: u64 },
+
+    #[error("Integrity verification failed for {path:?}: {reason}")]
+    IntegrityVerificationFailed { path: PathBuf, reason: String },
+
+    #[error("Journal error at {path:?}: {reason}")]
+    JournalError { path: PathBuf, reason: String },
+
+    #[error("Restoration conflict at {path:?}: {reason}")]
+    RestorationConflict { path: PathBuf, reason: String },
+
+    #[error("Sandbox boundary violation: {path:?} is outside trusted sandbox {sandbox_root:?}")]
+    SandboxViolation {
+        path: PathBuf,
+        sandbox_root: PathBuf,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, RootError>;

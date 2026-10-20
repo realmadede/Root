@@ -238,7 +238,10 @@ name = "root-guardian"
 version = "0.1.0"
 dependencies = [
  "root-core",
+ "root-platform",
  "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
 ]
 

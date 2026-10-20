@@ -244,3 +244,38 @@ Root discovers and classifies resources created by AI coding assistants and deve
 
 5. **Metadata-Only Privacy Guarantee**:
    - Root discovery exclusively queries paths, POSIX file metadata (statx/lstat), inode counts, and process tables. Private file contents, conversation transcripts, and authentication tokens are never read, stored, or serialized.
+
+---
+
+## 5. Quarantine Transactions, Atomic Renames, and Rollback Integrity (Phase 04)
+
+Phase 04 establishes transactional quarantine and rollback within verified synthetic fixture sandboxes:
+
+### 5.1 Same-Filesystem Atomic Movement (`renameat2`)
+On Linux, Root leverages native kernel support for atomic directory entry renaming:
+- **Syscall**: `libc::syscall(libc::SYS_renameat2, libc::AT_FDCWD, from, libc::AT_FDCWD, to, libc::RENAME_NOREPLACE)`.
+- **Atomicity**: The operating system guarantees that the entry is moved atomically. If the destination path already exists, the kernel rejects the operation with `EEXIST` (`RootError::DestinationCollision`), preventing unintentional data clobbering.
+- **Directory Synchronization**: Immediately following a successful rename, Root opens parent directories of both the source and the quarantine destination and issues `fsync` (`dir_file.sync_all()`) to guarantee directory entry persistence.
+
+### 5.2 Cross-Filesystem Realities (`EXDEV`)
+- **Kernel Restriction**: `renameat2` fails immediately with `EXDEV` when attempting to move a file across filesystem or mount boundaries.
+- **Phase 04 Invariant**: Cross-filesystem mutation is strictly rejected in Phase 04. Root detects device mismatches (`source_dev != dest_dev`) and halts execution before any data transfer is initiated.
+- **Future Architecture**: A cross-filesystem move requires a multi-step sequence: verified streaming copy -> SHA-256 hash comparison -> permission synchronization -> source unlinking. This sequence is inherently non-atomic, requiring explicit journal recovery states to survive power loss or disk exhaustion.
+
+### 5.3 TOCTOU Race Condition Mitigation
+Between the initial authorization evaluation and the physical relocation, files on disk could theoretically be swapped, replaced with symlinks, or reparented. Root mitigates Time-of-Check to Time-of-Use (TOCTOU) risks by performing an immediate pre-mutation revalidation check:
+1. Re-queries filesystem metadata via `lstat` / `symlink_metadata` (never following symlinks).
+2. Verifies that the observed device ID (`st_dev`) and inode number (`st_ino`) match the initial authorization receipt.
+3. Verifies that the resource UID matches the unprivileged operator UID.
+4. If any attribute mismatches, the operation immediately aborts with `RejectionReason::FilesystemIdentityChanged`.
+
+### 5.4 Recovery Journaling and Durability Limitations
+- **Append-Only JSONL**: Operations are logged sequentially to `<sandbox>/.root_journal/journal.jsonl`.
+- **Durability**: Every journal append invokes `file.sync_data()` to ensure physical persistence on disk.
+- **Durability Limitations**: Append-only JSONL files are not immune to catastrophic sudden power failure during a partial write. Root mitigates this by scanning for malformed lines (`RootError::JournalError`) and identifying interrupted transactions left in `Prepared` or `Quarantined` states.
+
+### 5.5 Restoration Conflict Handling
+When executing a restoration (`root undo`), the original location may have been re-occupied by newly generated files:
+- Root explicitly tests the destination path before touching the quarantine file.
+- If the destination already exists, Root refuses to overwrite it, aborting with `RootError::RestorationConflict`.
+- The quarantine file remains intact and safe in staging, preventing any data destruction.
