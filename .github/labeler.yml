@@ -1,0 +1,33 @@
+area: core:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/root-core/**'
+
+area: platform:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/root-platform/**'
+
+area: guardian:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/root-guardian/**'
+
+area: cli:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/root-cli/**'
+
+area: documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '*.md'
+
+area: ci-cd:
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+area: security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'SECURITY.md'
+          - 'docs/threat-model.md'
+          - 'docs/cleanup-policy.md'
+          - 'crates/root-guardian/**'

@@ -1,0 +1,70 @@
+name: Bug Report
+description: Report a defect, unexpected behavior, or invariant failure in Root.
+title: "fix: "
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for submitting a bug report. Root prioritizes predictability, host safety, and auditability.
+        If you suspect a security vulnerability, please do NOT use this form; refer to our [Security Policy](https://github.com/realmadede/Root/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Provide a clear and concise description of the observed defect.
+      placeholder: Describe the defect clearly and accurately.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Provide deterministic steps to reproduce the behavior.
+      placeholder: |
+        1. Run '...'
+        2. Inspect output '...'
+        3. Observe defect
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: Explain what you expected to happen based on Root documentation and safety policies.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Information
+      description: Detail the operating environment where the defect occurred.
+      placeholder: |
+        - OS Distribution: (e.g., Kali Linux Rolling 2026.1 / Ubuntu 24.04 LTS)
+        - Kernel Version: (e.g., Linux 6.12.0)
+        - Desktop Environment & Display Server: (e.g., GNOME 47, Wayland)
+        - Rust Version: (e.g., rustc 1.85.0)
+        - Root Version / Commit: (e.g., 0.1.0-alpha / commit 2c0c2d2)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Diagnostic Logs & Outputs
+      description: Provide relevant command output (e.g., 'root doctor' or backtrace). Avoid including private personal data.
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Safety & Invariant Confirmation
+      options:
+        - label: I confirm this issue does not leak private user credentials, keys, or proprietary data.
+          required: true
+        - label: I have verified this behavior using deterministic reproduction steps.
+          required: true

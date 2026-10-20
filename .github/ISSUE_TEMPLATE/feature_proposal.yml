@@ -1,0 +1,57 @@
+name: Feature Proposal
+description: Propose an architectural addition or enhancement to Root.
+title: "feat: "
+labels: ["type: feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature proposals must align with Root's local-first, deterministic, security-first mission.
+        Features requiring privileged access (sudo/root) or cloud AI runtime dependencies will not be accepted.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What resource management or developer workflow problem does this proposal solve?
+      placeholder: Describe the current limitation or problem clearly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution & Architecture
+      description: Describe the technical implementation, domain models, or platform traits involved.
+      placeholder: Detail the proposed components, interfaces, and algorithms.
+    validations:
+      required: true
+
+  - type: textarea
+    id: safety-considerations
+    attributes:
+      label: Safety & Threat Model Considerations
+      description: How does this feature uphold the Host Isolation Rule, Quarantine-First policy, and unprivileged execution model?
+      placeholder: Explain how potential risks (data loss, race conditions, unauthorized signals) are mitigated.
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification & Sandboxed Testing Plan
+      description: How will this feature be verified across Level 1 synthetic fixtures, Level 2 containers, or Level 3 VMs?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Invariant Confirmation
+      options:
+        - label: This proposal does not require root/sudo privileges (Principle of Least Privilege).
+          required: true
+        - label: This proposal does not introduce AI runtime or cloud telemetry dependencies.
+          required: true
+        - label: This proposal preserves headless core engine portability.
+          required: true
