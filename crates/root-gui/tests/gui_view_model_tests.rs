@@ -237,7 +237,7 @@ fn test_06_evidence_presentation() {
         .provenance_facts
         .iter()
         .any(|f| f.contains("HighConfidence")));
-    assert_eq!(vm.guardian_decision, "Preserve (Phase 08 Read-Only Policy)");
+    assert_eq!(vm.guardian_decision, "Preserve (Read-Only Policy)");
 }
 
 // 7. Protection-state presentation
@@ -737,4 +737,75 @@ fn test_26_native_gtk_component_construction() {
     assert!(activity_w.is_visible() || !activity_w.is_sensitive() || true);
     assert!(schedule_w.is_visible() || !schedule_w.is_sensitive() || true);
     assert!(settings_w.is_visible() || !settings_w.is_sensitive() || true);
+}
+
+// 27. Unicode and non-Latin character paths handling
+#[test]
+fn test_27_unicode_path_presentation_and_filtering() {
+    use root_gui::model::presentation::format_path_middle;
+    use std::path::PathBuf;
+
+    // 1. Verify middle truncation on Cyrillic and accented multi-byte UTF-8 paths
+    let cyrillic_path = PathBuf::from(
+        "/home/madede/проект_разработки/исходники/отчет_производительности_системы_2026.log",
+    );
+    let truncated_cyrillic = format_path_middle(&cyrillic_path, 40);
+    assert!(truncated_cyrillic.contains("..."));
+    assert!(truncated_cyrillic.starts_with("/home/madede/"));
+
+    let french_path =
+        PathBuf::from("/home/madede/données_recherche/modèle_entraîné_résumé_système.cache");
+    let truncated_french = format_path_middle(&french_path, 35);
+    assert!(truncated_french.contains("..."));
+
+    // 2. Load Unicode findings into ResourcesViewModel
+    let mut resources = root_gui::view_model::ResourcesViewModel::new();
+    let findings = vec![
+        make_dummy_finding(
+            "AI Agent",
+            "log-artifacts",
+            PathBuf::from("/home/user/проекты/тест_отчет.log"),
+            2048,
+            ProtectionTier::SafeRecoverable,
+            LifecycleState::DormantTransient,
+        ),
+        make_dummy_finding(
+            "Language Model",
+            "model-cache",
+            PathBuf::from("/home/user/données/résumé_modèle.cache"),
+            8192,
+            ProtectionTier::SafeRecoverable,
+            LifecycleState::Persistent,
+        ),
+        make_dummy_finding(
+            "Compiler Toolchain",
+            "build-cache",
+            PathBuf::from("/home/user/münchen/über_speicher.tmp"),
+            4096,
+            ProtectionTier::ObsoleteTransient,
+            LifecycleState::DormantTransient,
+        ),
+    ];
+
+    resources.load_findings(&findings);
+    assert_eq!(resources.total_unfiltered_count(), 3);
+    assert_eq!(resources.items().len(), 3);
+
+    // 3. Search and filter by non-Latin and accented queries
+    resources.set_search_query("résumé");
+    assert_eq!(resources.items().len(), 1);
+    assert!(resources.items()[0]
+        .path
+        .to_string_lossy()
+        .contains("résumé"));
+
+    resources.set_search_query("проекты");
+    assert_eq!(resources.items().len(), 1);
+    assert!(resources.items()[0]
+        .path
+        .to_string_lossy()
+        .contains("проекты"));
+
+    resources.set_search_query("");
+    assert_eq!(resources.items().len(), 3);
 }

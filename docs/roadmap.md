@@ -183,9 +183,9 @@ gantt
   - Added Pango markup character escaping (`escape_markup`), eliminating all GTK markup parsing warnings on ampersands and special characters.
   - Integrated `AdwStyleManager` theme switching (System Default, Force Light, Force Dark).
   - Verified FreeDesktop desktop entry (`data/io.github.realmadede.Root.desktop`) via `desktop-file-validate` with zero errors.
-  - Recorded empirical performance measurements on host workstation (1.0s launch time, 119.9 MiB idle RSS, 10.5ms shutdown latency, <1ms cancellation latency).
-  - Extended regression suite to 26 automated tests in `root-gui` covering all Section 23 areas, including Level B native GTK component construction; achieved 158 total passing tests across the workspace.
-- **Safety Gate**: Passed all 158 workspace tests; strictly read-only execution; zero mutation actions exposed; Guardian rejects all mutating requests unconditionally.
+  - Recorded empirical performance measurements on host workstation (1.0s launch time, 126.89 MiB idle RSS, 15.5ms shutdown latency, <1ms cancellation latency).
+  - Extended regression suite to 27 automated tests in `root-gui` covering all Section 23 areas, including Level B native GTK component construction and Unicode path handling; achieved 159 total passing tests across the workspace.
+- **Safety Gate**: Passed all 159 workspace tests; strictly read-only execution; zero mutation actions exposed; Guardian rejects all mutating requests unconditionally.
 
 ---
 

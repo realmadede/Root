@@ -44,27 +44,35 @@ pub fn build_processes_view(vm: &ProcessesViewModel) -> gtk4::Widget {
     let list_group = adw::PreferencesGroup::new();
     list_group.set_title("Running Processes");
 
-    for proc in vm.visible_processes().iter().take(200) {
-        let row = adw::ActionRow::new();
-        row.set_title(&format!("PID {} — {}", proc.pid, proc.name));
-        let attr_display = proc
-            .attributed_tool
-            .as_deref()
-            .unwrap_or("Unattributed System Process");
-        let sub = format!(
-            "State: {} | UID: {} | Attribution: {} (Confidence: {})",
-            proc.state_display(),
-            proc.uid,
-            attr_display,
-            proc.confidence.label()
-        );
-        row.set_subtitle(&sub);
+    if vm.visible_processes().is_empty() {
+        let empty_row = adw::ActionRow::new();
+        empty_row.set_title("No Processes Found");
+        empty_row
+            .set_subtitle("No running processes match the current user filter or search criteria.");
+        list_group.add(&empty_row);
+    } else {
+        for proc in vm.visible_processes().iter().take(200) {
+            let row = adw::ActionRow::new();
+            row.set_title(&format!("PID {} — {}", proc.pid, proc.name));
+            let attr_display = proc
+                .attributed_tool
+                .as_deref()
+                .unwrap_or("Unattributed System Process");
+            let sub = format!(
+                "State: {} | UID: {} | Attribution: {} (Confidence: {})",
+                proc.state_display(),
+                proc.uid,
+                attr_display,
+                proc.confidence.label()
+            );
+            row.set_subtitle(&sub);
 
-        let rss_label = gtk4::Label::new(Some(&proc.rss_display()));
-        rss_label.add_css_class("numeric");
-        row.add_suffix(&rss_label);
+            let rss_label = gtk4::Label::new(Some(&proc.rss_display()));
+            rss_label.add_css_class("numeric");
+            row.add_suffix(&rss_label);
 
-        list_group.add(&row);
+            list_group.add(&row);
+        }
     }
 
     page.add(&list_group);

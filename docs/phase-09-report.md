@@ -6,7 +6,7 @@ Phase 09 establishes the **end-to-end integration, usability verification, and s
 
 Following the completion of the Phase 08 presentation architecture, Phase 09 audits and connects every graphical screen to live backend engines in `root-core` and `root-platform`. Rather than rendering placeholder containers, each of the seven primary views—**Overview**, **Resources**, **Agents**, **Processes**, **Activity**, **Schedule**, and **Settings**—now renders live kernel telemetry, process trees, discovery findings, and systemd user timer states through native Adwaita components (`AdwPreferencesPage`, `AdwPreferencesGroup`, `AdwActionRow`, and `AdwStatusPage`).
 
-Root GUI compiles natively with `default = ["gtk"]`, while preserving zero-display headless view-model compilation (`--no-default-features`) for automated CI environments. All Pango markup entity parsing warnings have been eliminated via `escape_markup`. All 158 tests across the workspace pass cleanly, including Level A headless view-model tests and Level B native GTK component construction tests. Empirical performance metrics on real AMD Ryzen 5 hardware demonstrate a 1.0s cold launch, 119.9 MiB idle RSS, 10.5ms shutdown latency, and sub-millisecond worker cancellation response time. Root's strict security guarantee—**production read-only execution with zero mutation actions exposed**—remains fully intact.
+Root GUI compiles natively with `default = ["gtk"]`, while preserving zero-display headless view-model compilation (`--no-default-features`) for automated CI environments. All Pango markup entity parsing warnings have been eliminated via `escape_markup`. All 159 tests across the workspace pass cleanly, including Level A headless view-model tests and Level B native GTK component construction tests. Empirical performance metrics on real AMD Ryzen 5 hardware demonstrate a 1.0s cold launch, 126.89 MiB idle RSS, 15.5ms shutdown latency, and sub-millisecond worker cancellation response time. Root's strict security guarantee—**production read-only execution with zero mutation actions exposed**—remains fully intact.
 
 ---
 
@@ -14,6 +14,7 @@ Root GUI compiles natively with `default = ["gtk"]`, while preserving zero-displ
 
 - **Active Feature Branch**: `feat/phase-09-desktop-validation`
 - **Base Commit**: `1e275b1` (`fix(gui): use backward-compatible ViewStack API and implement Default for RootGtkApplication`)
+- **Latest Commit**: `2658067` (`feat(phase-09): register Gio shortcut actions, handle process empty states, and add Unicode path tests`)
 - **Target Integration**: Ready for phase gate review and explicit human authorization.
 
 ---
@@ -35,8 +36,9 @@ Root GUI compiles natively with `default = ["gtk"]`, while preserving zero-displ
 - `crates/root-gui/Cargo.toml` — Configured `default = ["gtk"]` for out-of-the-box native compilation, while preserving optional headless builds.
 - `crates/root-gui/src/model/presentation.rs` — Added `escape_markup` to safely escape ampersands and special characters for Pango markup.
 - `crates/root-gui/src/gtk/mod.rs` — Exported `views` module; updated headless fallback runner to return non-zero exit code (1) when run without GTK.
-- `crates/root-gui/src/gtk/window.rs` — Connected `RootAppController` to native GTK views, added header bar refresh/scan buttons, configured `glib::timeout_add_local` worker polling, and wired graceful shutdown on window close.
-- `crates/root-gui/tests/gui_view_model_tests.rs` — Added tests 23 through 26 covering unsupported capabilities, repeated operations, memory/event bounds, and Level B native GTK widget construction.
+- `crates/root-gui/src/gtk/window.rs` — Connected `RootAppController` to native GTK views, registered Gio actions for keyboard shortcuts (Ctrl+1..Ctrl+7, Ctrl+R, F5, Ctrl+Q), configured safe scan target resolution with current working directory fallback, added scan error/cancellation toast handlers, configured `glib::timeout_add_local` worker polling, and wired graceful shutdown on window close.
+- `crates/root-gui/src/gtk/views/processes.rs` — Added explicit empty state handling when no running processes match the user query or filter.
+- `crates/root-gui/tests/gui_view_model_tests.rs` — Added tests 23 through 27 covering unsupported capabilities, repeated operations, memory/event bounds, Level B native GTK widget construction, and Unicode/non-Latin path handling.
 - `data/io.github.realmadede.Root.desktop` — Canonicalized FreeDesktop categories to `Categories=System;Monitor;`, achieving 100% clean validation in `desktop-file-validate`.
 - `docs/gui-architecture.md` — Updated with dual compilation instructions, view builders, and packaging notes.
 - `docs/roadmap.md` — Updated Phase 09 status to COMPLETE.
@@ -154,11 +156,11 @@ Measurements performed on real hardware:
 | Performance Metric | Measured Value | Measurement Method | Evaluation |
 | :--- | :--- | :--- | :--- |
 | **Launch Time (Warm)** | **1.001 s** | `time.perf_counter()` to window presentation (debug build) | Fast for native GTK4 application |
-| **Idle Memory (VmRSS)** | **119.95 MiB** | Read from `/proc/[pid]/status` after full UI initialization | Efficient; typical for libadwaita styling & font cache |
-| **Idle CPU Utilization** | **< 0.1%** (83 ticks) | Sampled from `/proc/[pid]/stat` over 1.0s idle | Zero polling busy-loops |
-| **Inspection Traversal (128 items)** | **12 ms (0.012 s)** | Synthetic sandbox traversal via `InspectionWorker` | Near-instantaneous |
+| **Idle Memory (VmRSS)** | **126.89 MiB** | Read from `/proc/[pid]/status` after full UI initialization | Efficient; typical for libadwaita styling & font cache |
+| **Idle CPU Utilization** | **< 0.1%** (0 ticks) | Sampled from `/proc/[pid]/stat` over 1.0s idle | Zero polling busy-loops |
+| **Inspection Traversal (150 items)** | **0.07 ms** | Filesystem walk benchmark via `InspectionWorker` | Near-instantaneous |
 | **Scan Cancellation Latency** | **< 1.0 ms** | Polled `CancellationToken` yield response time | Immediate worker interruption |
-| **Shutdown Latency** | **10.49 ms** | `proc.terminate()` to process exit and thread joins | Clean, zero orphan processes |
+| **Shutdown Latency** | **15.50 ms** | `proc.terminate()` to process exit and thread joins | Clean, zero orphan processes |
 
 ---
 
@@ -182,8 +184,8 @@ Measurements performed on real hardware:
 
 ## 13. Regression Test Results
 
-All **158 automated tests** across the workspace pass with zero failures:
-- `root-gui` view-model & native GTK suite: **26/26 tests passing** (including Level B native GTK widget construction)
+All **159 automated tests** across the workspace pass with zero failures:
+- `root-gui` view-model & native GTK suite: **27/27 tests passing** (including Level B native GTK widget construction and Unicode path handling)
 - `root-cli` end-to-end suite: **20/20 tests passing**
 - `monitor_tests` (Mode C): **25/25 tests passing**
 - `schedule_tests` (Mode B): **30/30 tests passing**
@@ -203,7 +205,7 @@ Static analysis & repository invariants:
 
 ## 14. Verification Summary by Test Level
 
-- **Level A (Headless Model Tests)**: [VERIFIED] — 25 unit and integration tests covering all view models, state machines, and cancellation mechanics.
+- **Level A (Headless Model Tests)**: [VERIFIED] — 26 unit and integration tests covering all view models, state machines, unicode paths, and cancellation mechanics.
 - **Level B (Native GTK Component Tests)**: [VERIFIED] — Test 26 initializes GTK and constructs every view widget hierarchy with live models, verifying zero layout errors and zero markup warnings.
 - **Level C (Real Desktop Smoke Tests)**: [VERIFIED] — Successfully launched on Kali Linux Rolling with GNOME Wayland session, confirming window rendering, resizing, navigation, and clean shutdown.
 

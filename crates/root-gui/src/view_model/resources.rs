@@ -36,8 +36,8 @@ impl ResourceItemViewModel {
         let guardian_decision = match finding.protection_tier {
             ProtectionTier::StrictlyProtected => "Preserve: resource is strictly protected",
             ProtectionTier::UserConfirmRequired => "Preserve: requires explicit operator review",
-            ProtectionTier::ObsoleteTransient => "Preserve (Phase 08 Read-Only Policy)",
-            ProtectionTier::SafeRecoverable => "Preserve (Phase 08 Read-Only Policy)",
+            ProtectionTier::ObsoleteTransient => "Preserve (Read-Only Policy)",
+            ProtectionTier::SafeRecoverable => "Preserve (Read-Only Policy)",
             ProtectionTier::NonActionable => "Preserve: resource is non-actionable",
         }
         .to_string();

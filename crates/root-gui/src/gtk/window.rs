@@ -6,6 +6,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 #[cfg(feature = "gtk")]
+use gtk4::gio;
+#[cfg(feature = "gtk")]
+use gtk4::gio::prelude::*;
+#[cfg(feature = "gtk")]
 use gtk4::glib;
 #[cfg(feature = "gtk")]
 use gtk4::prelude::*;
@@ -172,13 +176,62 @@ pub fn build_and_present_window(app: &adw::Application) {
 
         scan_btn.connect_clicked(move |_| {
             let mut ctrl = ctrl_clone.borrow_mut();
-            let target = std::env::temp_dir().join("root-test-fixture");
+            let test_fixture = std::env::temp_dir().join("root-test-fixture");
+            let target = if test_fixture.exists() {
+                test_fixture
+            } else if let Ok(cwd) = std::env::current_dir() {
+                cwd
+            } else {
+                std::env::temp_dir()
+            };
             ctrl.start_scan(target);
             toast_overlay_clone
                 .add_toast(adw::Toast::new("Resource discovery started in background"));
         });
     }
     header_bar.pack_end(&scan_btn);
+
+    // Register Gio actions for keyboard shortcuts (Ctrl+1..Ctrl+7, Ctrl+R, F5, Ctrl+Q)
+    {
+        let page_actions = [
+            ("overview", "overview"),
+            ("resources", "resources"),
+            ("agents", "agents"),
+            ("processes", "processes"),
+            ("activity", "activity"),
+            ("schedule", "schedule"),
+            ("settings", "settings"),
+        ];
+
+        for (action_name, page_name) in page_actions {
+            if app.lookup_action(action_name).is_none() {
+                let stack = view_stack.clone();
+                let action = gio::SimpleAction::new(action_name, None);
+                action.connect_activate(move |_, _| {
+                    stack.set_visible_child_name(page_name);
+                });
+                app.add_action(&action);
+            }
+        }
+
+        if app.lookup_action("refresh").is_none() {
+            let refresh_action = gio::SimpleAction::new("refresh", None);
+            let r_btn = refresh_btn.clone();
+            refresh_action.connect_activate(move |_, _| {
+                r_btn.emit_clicked();
+            });
+            app.add_action(&refresh_action);
+        }
+
+        if app.lookup_action("quit").is_none() {
+            let quit_action = gio::SimpleAction::new("quit", None);
+            let win = window.clone();
+            quit_action.connect_activate(move |_, _| {
+                win.close();
+            });
+            app.add_action(&quit_action);
+        }
+    }
 
     // Periodic worker poll timer
     {
@@ -219,6 +272,25 @@ pub fn build_and_present_window(app: &adw::Application) {
                     "Resource discovery completed: {} findings",
                     items_count
                 )));
+            }
+
+            if let (
+                crate::model::state::ScanExecutionState::Scanning { .. },
+                crate::model::state::ScanExecutionState::Failed { error, .. },
+            ) = (&prev_state, &ctrl.state.scan_state)
+            {
+                toast_overlay_clone.add_toast(adw::Toast::new(&format!(
+                    "Discovery scan failed: {}",
+                    error
+                )));
+            }
+
+            if let (
+                crate::model::state::ScanExecutionState::Scanning { .. },
+                crate::model::state::ScanExecutionState::Cancelled { .. },
+            ) = (&prev_state, &ctrl.state.scan_state)
+            {
+                toast_overlay_clone.add_toast(adw::Toast::new("Discovery scan cancelled"));
             }
 
             glib::ControlFlow::Continue
