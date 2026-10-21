@@ -30,7 +30,7 @@ gantt
     Phase 09 : Desktop Usability & Security Validation :done, p09, 2027-07, 2027-07
     section Multiplatform & Release
     Phase 10 : Cross-Platform Expansion (macOS, Win)    :active, p10, 2027-08, 2027-09
-    Phase 11 : Hardening, SHA-256 Packaging & Release   :p11, 2027-10, 2027-10
+    Phase 11 : Hardening, Web, Packaging & Release      :p11, 2027-10, 2027-10
 ```
 
 ---
@@ -218,6 +218,10 @@ gantt
     - Publish `root-cli` and core workspace crates to crates.io for standard `cargo install root-cli` workflows.
   - **Automated CI/CD Release Pipeline**:
     - Establish GitHub Actions release automation triggered strictly on verified Git release tags (`v*`).
+  - **Official Project Landing Website & Documentation Portal**:
+    - Design and deploy a modern, lightweight, privacy-respecting landing website showcasing Root's architecture, interactive CLI terminal demonstrations, native GTK4/libadwaita desktop showcase, security guarantees, and performance benchmarks.
+    - Provide direct download links for standalone platform binaries with instant copyable SHA-256 verification commands and cryptographic signature validation guides.
+    - Host statically with zero telemetry, zero tracking scripts, and complete adherence to Root's local-first privacy standards.
   - **Comprehensive Security Audit**:
     - Third-party security review of the Guardian transaction engine and Linux platform abstraction layers.
 - **Safety Gate**: Zero high or medium security vulnerabilities; reproducible release builds; 100% verified SHA-256 checksums.

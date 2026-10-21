@@ -245,7 +245,7 @@ All core platform engines, discovery rules, security authorization layers, sched
 
 The project is currently positioned at the Phase 09 review gate, with work preparing for **Phase 10: Cross-Platform Expansion (macOS & Windows)** and **Phase 11: 1.0 Production Hardening, Packaging & SHA-256 Distribution**.
 
-Under Phase 11, users will no longer need to clone the repository or maintain a local Rust toolchain; pre-compiled standalone release binaries will be published directly to GitHub Releases alongside official `SHA256SUMS` manifests and cryptographic signatures for deterministic integrity verification.
+Under Phase 11, users will no longer need to clone the repository or maintain a local Rust toolchain; pre-compiled standalone release binaries will be published directly to GitHub Releases alongside official `SHA256SUMS` manifests and cryptographic signatures for deterministic integrity verification. An official project landing website and documentation portal will accompany the release—providing interactive terminal demonstrations, architecture guides, and direct download links.
 
 ---
 
