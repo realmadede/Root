@@ -243,7 +243,9 @@ Root has completed **Phase 09: Native Desktop Integration, Usability and Securit
 
 All core platform engines, discovery rules, security authorization layers, scheduled background timers, live event monitoring watchers, and native GTK4/libadwaita graphical views are fully implemented, verified, and backed by 169 passing automated tests.
 
-The project is currently positioned at the Phase 09 review gate, with work preparing for **Phase 10: Cross-Platform Expansion (macOS & Windows)**.
+The project is currently positioned at the Phase 09 review gate, with work preparing for **Phase 10: Cross-Platform Expansion (macOS & Windows)** and **Phase 11: 1.0 Production Hardening, Packaging & SHA-256 Distribution**.
+
+Under Phase 11, users will no longer need to clone the repository or maintain a local Rust toolchain; pre-compiled standalone release binaries will be published directly to GitHub Releases alongside official `SHA256SUMS` manifests and cryptographic signatures for deterministic integrity verification.
 
 ---
 

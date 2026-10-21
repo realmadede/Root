@@ -16,20 +16,21 @@ gantt
     title Root Development Roadmap
     dateFormat  YYYY-MM
     section Foundation & Core
-    Phase 00 : Foundation, Research & Architecture     :active, p00, 2026-10, 2026-10
-    Phase 01 : Core Models & Synthetic Fixtures         :p01, 2026-11, 2026-11
-    Phase 02 : Linux Platform Engine (/proc, pidfd)     :p02, 2026-12, 2026-12
+    Phase 00 : Foundation, Research & Architecture     :done, p00, 2026-10, 2026-10
+    Phase 01 : Core Models & Synthetic Fixtures         :done, p01, 2026-11, 2026-11
+    Phase 02 : Linux Platform Engine (/proc, pidfd)     :done, p02, 2026-12, 2026-12
     section Analysis & Security
-    Phase 03 : Agent & Tooling Scanners                 :p03, 2027-01, 2027-01
-    Phase 04 : Guardian Security & Quarantine Rollback  :p04, 2027-02, 2027-02
+    Phase 03 : Agent & Tooling Scanners                 :done, p03, 2027-01, 2027-01
+    Phase 04 : Guardian Security & Quarantine Rollback  :done, p04, 2027-02, 2027-02
     section Interfaces & Automation
-    Phase 05 : Command Line Interface (root-cli)        :p05, 2027-03, 2027-03
-    Phase 06 : Scheduled Inspections (systemd timers)   :p06, 2027-04, 2027-04
-    Phase 07 : Live Event Monitoring (root-monitor)     :p07, 2027-05, 2027-05
-    Phase 08 : Native Desktop GUI (GTK4 + libadwaita)   :p08, 2027-06, 2027-07
+    Phase 05 : Command Line Interface (root-cli)        :done, p05, 2027-03, 2027-03
+    Phase 06 : Scheduled Inspections (systemd timers)   :done, p06, 2027-04, 2027-04
+    Phase 07 : Live Event Monitoring (root-monitor)     :done, p07, 2027-05, 2027-05
+    Phase 08 : Native Desktop GUI (GTK4 + libadwaita)   :done, p08, 2027-06, 2027-07
+    Phase 09 : Desktop Usability & Security Validation :done, p09, 2027-07, 2027-07
     section Multiplatform & Release
-    Phase 09 : Cross-Platform Expansion (macOS, Win)    :p09, 2027-08, 2027-09
-    Phase 10 : Hardening, Packaging & 1.0 Release       :p10, 2027-10, 2027-10
+    Phase 10 : Cross-Platform Expansion (macOS, Win)    :active, p10, 2027-08, 2027-09
+    Phase 11 : Hardening, SHA-256 Packaging & Release   :p11, 2027-10, 2027-10
 ```
 
 ---
@@ -198,10 +199,25 @@ gantt
 
 ---
 
-### Phase 11: 1.0 Production Hardening, Packaging & Security Audit
-- **Primary Goal**: Publish audited, production-grade open source releases.
+### Phase 11: 1.0 Production Hardening, Packaging, SHA-256 Distribution & Security Audit
+- **Primary Goal**: Publish audited, production-grade open source releases distributed via GitHub Releases, native system packages, and cryptographic verification manifests.
 - **Key Tasks**:
-  - Comprehensive third-party security audit.
-  - Native packaging: `.deb` (Kali/Debian), `.rpm` (Fedora), Arch PKGBUILD, Flatpak for GNOME Software.
-  - Reproducible builds and signed releases.
-- **Safety Gate**: Zero high/medium security vulnerabilities.
+  - **Standalone GitHub Release Binaries**:
+    - Pre-compile optimized, standalone release binaries for `root` (CLI) and `root-gui` (desktop application) targeting Linux (`x86_64`, `aarch64`), macOS (`x86_64`, `arm64`), and Windows (`x86_64`).
+    - Eliminate the requirement for end users to clone the Git repository or install the Rust/Cargo toolchain.
+  - **Deterministic SHA-256 Checksums and Provenance Verification**:
+    - Compute and publish official `SHA256SUMS` manifests alongside every release archive on the GitHub Releases page.
+    - Support standard user-side checksum verification (`sha256sum -c SHA256SUMS`).
+    - Provide cryptographic release signatures (`SHA256SUMS.sig`) via GPG and Sigstore (`cosign`) to guarantee release provenance.
+  - **Native Linux System Packaging**:
+    - Build `.deb` packages for Debian, Ubuntu, and Kali Linux with desktop launcher integration and manpages.
+    - Build `.rpm` packages for Fedora and RHEL.
+    - Publish official PKGBUILD for Arch Linux (AUR).
+    - Publish official Flatpak package for GNOME Software and Flathub.
+  - **Ecosystem Distribution**:
+    - Publish `root-cli` and core workspace crates to crates.io for standard `cargo install root-cli` workflows.
+  - **Automated CI/CD Release Pipeline**:
+    - Establish GitHub Actions release automation triggered strictly on verified Git release tags (`v*`).
+  - **Comprehensive Security Audit**:
+    - Third-party security review of the Guardian transaction engine and Linux platform abstraction layers.
+- **Safety Gate**: Zero high or medium security vulnerabilities; reproducible release builds; 100% verified SHA-256 checksums.
