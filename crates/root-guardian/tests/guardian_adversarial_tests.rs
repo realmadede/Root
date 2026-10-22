@@ -32,6 +32,8 @@
 //! 29. Fixture sandbox escape.
 //! 30. Guardian bypass attempt.
 
+#![cfg(target_os = "linux")]
+
 use root_core::{
     error::RootError,
     model::{

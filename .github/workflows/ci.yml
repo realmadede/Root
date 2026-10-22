@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-      - 'feat/**'
-      - 'fix/**'
-      - 'docs/**'
   pull_request:
     branches:
       - main
@@ -25,7 +22,7 @@ env:
 jobs:
   format:
     name: Code Formatting
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -40,7 +37,7 @@ jobs:
 
   clippy:
     name: Clippy Lints
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -58,7 +55,7 @@ jobs:
 
   test:
     name: Level 1 Synthetic Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -74,7 +71,7 @@ jobs:
 
   documentation:
     name: Documentation Integrity
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
@@ -92,7 +89,7 @@ jobs:
 
   build:
     name: Workspace Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -105,6 +102,25 @@ jobs:
 
       - name: Build all targets
         run: cargo build --workspace --all-targets
+
+  gui:
+    name: Native Desktop GUI (GTK4 + libadwaita)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install GTK4 and libadwaita dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libgtk-4-dev libadwaita-1-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify GUI with native GTK feature
+        run: cargo test -p root-gui --features gtk --verbose
 
   cross-platform:
     name: Cross-Platform Engine (${{ matrix.os }})

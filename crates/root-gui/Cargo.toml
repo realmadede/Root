@@ -23,7 +23,7 @@ gtk4 = { version = "0.9", optional = true }
 libadwaita = { version = "0.7", optional = true }
 
 [features]
-default = ["gtk"]
+default = []
 gtk = ["dep:gtk4", "dep:libadwaita"]
 
 [dev-dependencies]

@@ -15,7 +15,7 @@ permissions:
 jobs:
   validate-title:
     name: Validate Conventional Commit Title
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Verify PR Title Format
         uses: amannn/action-semantic-pull-request@v5

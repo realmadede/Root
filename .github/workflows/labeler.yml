@@ -14,7 +14,7 @@ permissions:
 jobs:
   triage:
     name: Auto Label PR
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Apply labels based on changed files
         uses: actions/labeler@v5

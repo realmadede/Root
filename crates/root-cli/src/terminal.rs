@@ -36,7 +36,7 @@ pub fn get_terminal_width() -> usize {
         }
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(unix)]
     unsafe {
         let mut winsize: libc::winsize = std::mem::zeroed();
         if libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize) == 0
