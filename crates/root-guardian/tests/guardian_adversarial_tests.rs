@@ -332,7 +332,16 @@ fn test_adversarial_06_symlink_substitution() {
 #[test]
 fn test_adversarial_07_scope_escape() {
     let env = TestEnv::new();
-    let outside_path = PathBuf::from("/etc/hosts");
+    let outside_dir = env
+        .sandbox
+        .root()
+        .parent()
+        .unwrap()
+        .join("outside_target_07");
+    fs::create_dir_all(&outside_dir).unwrap();
+    let outside_path = outside_dir.join("outside.txt");
+    fs::write(&outside_path, b"outside content").unwrap();
+
     let candidate = ResourceCandidate {
         id: ResourceId::new("outside-escape"),
         location: ResourceLocation::new(outside_path.clone(), None, 1, 1),
@@ -793,8 +802,13 @@ fn test_adversarial_23_content_integrity_failure() {
 fn test_adversarial_24_disk_space_exhaustion() {
     let env = TestEnv::new();
     let file = env.write_file("disk_exhaust.dat", b"data");
-    let mut bad_journal =
-        RecoveryJournal::new(&PathBuf::from("/proc/sys/fs/bogus_journal.jsonl")).unwrap();
+
+    // Establish a synthetic read-only directory inside sandbox to simulate write exhaustion / failure
+    let ro_dir = env.sandbox.root().join("ro_journal_dir");
+    fs::create_dir(&ro_dir).unwrap();
+    let bad_journal_path = ro_dir.join("exhausted_journal.jsonl");
+    let mut bad_journal = RecoveryJournal::new(&bad_journal_path).unwrap();
+    fs::set_permissions(&ro_dir, fs::Permissions::from_mode(0o500)).unwrap();
 
     let candidate = env.make_candidate(&file, ResourceCategory::BuildArtifact);
     let request = AuthorizationRequest::new(
@@ -805,7 +819,7 @@ fn test_adversarial_24_disk_space_exhaustion() {
     )
     .with_multi_link(true);
 
-    // Journal append will fail on read-only proc path, aborting without moving the file
+    // Journal append will fail on read-only path, aborting without moving the file
     let res = TransactionEngine::quarantine(&env.sandbox, &mut bad_journal, &request);
     assert!(res.is_err());
     assert!(
@@ -848,33 +862,17 @@ fn test_adversarial_25_concurrent_requests() {
 // ---------------------------------------------------------------------------
 #[test]
 fn test_adversarial_26_gui_authorization_mismatch() {
-    // Confirm view models do not contain or expose any mutation execution APIs
-    let policy = root_guardian::GuardianPolicy::new();
-    let target = root_core::model::FindingTarget::Filesystem(ResourceCandidate {
-        id: ResourceId::new("gui-test"),
-        location: ResourceLocation::new(PathBuf::from("/home/user/test"), None, 1, 2),
-        category: ResourceCategory::BuildArtifact,
-        metadata: ResourceMetadata {
-            file_type: FileType::Directory,
-            storage: StorageMeasurement::from_raw(1000, 2, 1),
-            permissions_mode: 0o755,
-            mtime_epoch_secs: 1000,
-            atime_epoch_secs: 1000,
-            ctime_epoch_secs: 1000,
-        },
-        ownership: ResourceOwnership {
-            uid: 1000,
-            gid: 1000,
-            is_current_user: true,
-        },
-        associated_agent: None,
-    });
+    let env = TestEnv::new();
+    let file = env.write_file("gui_test.tmp", b"content");
+    let candidate = env.make_candidate(&file, ResourceCategory::BuildArtifact);
+    let target = root_core::model::FindingTarget::Filesystem(candidate);
 
+    let policy = root_guardian::GuardianPolicy::new();
     let decision = policy.evaluate(
         &target,
         ProtectionTier::SafeRecoverable,
         ProposedAction::Quarantine,
-        1000,
+        env.sandbox.operator_uid(),
     );
     assert!(
         matches!(decision, root_core::model::SafetyDecision::Rejected { .. }),
@@ -887,34 +885,17 @@ fn test_adversarial_26_gui_authorization_mismatch() {
 // ---------------------------------------------------------------------------
 #[test]
 fn test_adversarial_27_scheduler_authorization_mismatch() {
-    // Verify that Mode B scheduled inspection policy unconditionally rejects Prune and Quarantine
-    let policy = root_guardian::GuardianPolicy::new();
-    let candidate = ResourceCandidate {
-        id: ResourceId::new("sched-test"),
-        location: ResourceLocation::new(PathBuf::from("/tmp/sched_target"), None, 1, 2),
-        category: ResourceCategory::BuildArtifact,
-        metadata: ResourceMetadata {
-            file_type: FileType::RegularFile,
-            storage: StorageMeasurement::from_raw(500, 1, 1),
-            permissions_mode: 0o644,
-            mtime_epoch_secs: 1000,
-            atime_epoch_secs: 1000,
-            ctime_epoch_secs: 1000,
-        },
-        ownership: ResourceOwnership {
-            uid: 1000,
-            gid: 1000,
-            is_current_user: true,
-        },
-        associated_agent: None,
-    };
+    let env = TestEnv::new();
+    let file = env.write_file("sched_target.tmp", b"content");
+    let candidate = env.make_candidate(&file, ResourceCategory::BuildArtifact);
     let target = root_core::model::FindingTarget::Filesystem(candidate);
 
+    let policy = root_guardian::GuardianPolicy::new();
     let res = policy.evaluate(
         &target,
         ProtectionTier::ObsoleteTransient,
         ProposedAction::Quarantine,
-        1000,
+        env.sandbox.operator_uid(),
     );
     assert!(matches!(
         res,
@@ -950,7 +931,16 @@ fn test_adversarial_28_non_linux_mutation_rejection() {
 #[test]
 fn test_adversarial_29_fixture_sandbox_escape() {
     let env = TestEnv::new();
-    let outside_path = PathBuf::from("/var/log/syslog");
+    let outside_dir = env
+        .sandbox
+        .root()
+        .parent()
+        .unwrap()
+        .join("sandbox_outside_target_29");
+    fs::create_dir_all(&outside_dir).unwrap();
+    let outside_path = outside_dir.join("outside.txt");
+    fs::write(&outside_path, b"outside").unwrap();
+
     let assert_res = env.sandbox.assert_within_bounds(&outside_path);
     assert!(
         assert_res.is_err(),

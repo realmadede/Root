@@ -67,7 +67,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Execute workspace test suite
-        run: cargo test --workspace --verbose
+        run: cargo test --workspace --verbose -- --nocapture
 
   documentation:
     name: Documentation Integrity
@@ -139,8 +139,8 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Compile platform and headless crates
-        run: cargo check --package root-core --package root-platform --package root-guardian --package root-cli
+      - name: Compile platform crates
+        run: cargo check --package root-core --package root-platform
 
       - name: Execute platform unit and contract tests
-        run: cargo test --package root-core --package root-platform --package root-guardian --verbose
+        run: cargo test --package root-core --package root-platform --verbose
