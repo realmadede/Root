@@ -291,9 +291,12 @@ impl ResourceAccountant for LinuxAccountant {
         let user_uid = fs::metadata("/proc/self").map(|m| m.uid()).unwrap_or(1000);
         let user_gid = fs::metadata("/proc/self").map(|m| m.gid()).unwrap_or(1000);
 
+        let supported = CapabilityStatus::SupportedAndAccessible;
+        let inotify = Self::probe_inotify();
         Ok(PlatformCapabilities {
-            os_name: "Linux (Kali GNU/Linux Rolling)".to_string(),
+            os_name: format!("Linux ({})", Self::distribution_name()),
             kernel_version,
+            platform: root_core::model::PlatformKind::Linux,
             is_linux,
             user_uid,
             user_gid,
@@ -305,6 +308,42 @@ impl ResourceAccountant for LinuxAccountant {
             pidfd,
             openat2,
             statx,
+            process_enumeration: proc_fs,
+            process_start_time: proc_fs,
+            process_rss: proc_fs,
+            process_private_memory: proc_smaps_rollup,
+            process_swap: proc_fs,
+            system_memory: proc_meminfo,
+            memory_pressure: proc_pressure_memory,
+            file_identity: supported,
+            filesystem_events: inotify,
+            scheduler: CapabilityStatus::NotTested,
+            file_locking: supported,
+            posix_ownership: supported,
         })
+    }
+}
+
+impl LinuxAccountant {
+    /// Reads `PRETTY_NAME` from os-release; falls back to a generic label.
+    fn distribution_name() -> String {
+        fs::read_to_string("/etc/os-release")
+            .ok()
+            .and_then(|c| {
+                c.lines()
+                    .find_map(|l| l.strip_prefix("PRETTY_NAME="))
+                    .map(|v| v.trim_matches('"').to_string())
+            })
+            .unwrap_or_else(|| "GNU/Linux".to_string())
+    }
+
+    fn probe_inotify() -> CapabilityStatus {
+        let fd = unsafe { libc::inotify_init1(libc::IN_NONBLOCK | libc::IN_CLOEXEC) };
+        if fd >= 0 {
+            unsafe { libc::close(fd) };
+            CapabilityStatus::SupportedAndAccessible
+        } else {
+            CapabilityStatus::Unavailable
+        }
     }
 }

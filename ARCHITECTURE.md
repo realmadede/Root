@@ -24,8 +24,10 @@ graph TD
     end
 
     subgraph PlatformLayer["Platform Abstraction Layer"]
-        PlatformTraits["root-platform<br>• ProcessProvider<br>• ResourceAccountant<br>• FilesystemWatcher<br>• EnvironmentProvider"]
-        LinuxBackend["Linux Engine (/proc, cgroups v2, pidfd, inotify, statx)"]
+        PlatformTraits["root-platform<br>• FilesystemProvider<br>• ProcessProvider<br>• ResourceAccountant<br>• EnvironmentProvider<br>• FilesystemWatcher<br>• Scheduler"]
+        LinuxBackend["Linux Engine (/proc, cgroups v2, pidfd, inotify, statx, systemd timer)"]
+        MacBackend["macOS Adapter (libproc, sysctl, lstat, launchd LaunchAgents)"]
+        WinBackend["Windows Adapter (Toolhelp32, FileIdInfo, Task Scheduler, GlobalMemoryStatusEx)"]
     end
 
     CLI --> Core
@@ -45,6 +47,8 @@ graph TD
     Process --> PlatformTraits
     Workspace --> PlatformTraits
     PlatformTraits --> LinuxBackend
+    PlatformTraits --> MacBackend
+    PlatformTraits --> WinBackend
 ```
 
 ---
@@ -56,12 +60,21 @@ Root is organized as a unified Cargo workspace. In Phase 00, the architecture is
 ```
 crates/
 ├── root-core/          # Pure domain logic, policy rules, classification types
-│   ├── src/model/schedule.rs # ScheduleConfig, ScheduleInterval, ScheduleStatus models
-│   └── src/model/monitor.rs  # LiveFsEvent, ProcessObservation, MonitorBudget, DegradedReason
-├── root-platform/      # Cross-platform traits (ProcessProvider, FilesystemWatcher, etc.)
-│   └── src/linux/      # Linux-specific implementation (/proc, cgroups v2, pidfd, inotify)
-│       ├── scheduler.rs # systemd user unit generator, LinuxScheduler, DesktopNotifier
-│       └── monitor.rs   # InotifyWatcher, ProcessObserver, MemoryObserver, LinuxMonitorSession
+│   ├── src/model/platform_paths.rs # PlatformKind, path syntax, pseudo-fs & system directory prefixes
+│   ├── src/model/identity.rs       # Platform-neutral FileIdentity & IdentityKind
+│   ├── src/model/capabilities.rs   # 5-state explicit CapabilityStatus & PlatformCapabilities
+│   ├── src/model/schedule.rs       # ScheduleConfig, ScheduleInterval, ScheduleStatus models
+│   └── src/model/monitor.rs        # LiveFsEvent, ProcessObservation, MonitorBudget, DegradedReason
+├── root-platform/      # Cross-platform traits and read-only platform adapters
+│   ├── src/traits.rs   # FilesystemProvider, ProcessProvider, ResourceAccountant, Scheduler, etc.
+│   ├── src/native.rs   # Compile-time selection of Native* platform adapters
+│   ├── src/traversal.rs# Defensive, bounded traversal engine with cycle & symlink jail protection
+│   ├── src/lock.rs     # Portable advisory lock (flock on POSIX, LockFileEx on Windows)
+│   ├── src/notify.rs   # Cross-platform desktop notification dispatcher & privacy fingerprinting
+│   ├── src/linux/      # Linux-specific implementation (/proc, cgroups v2, pidfd, inotify, systemd timer)
+│   ├── src/macos/      # macOS read-only adapter (libproc, sysctl, launchd LaunchAgents, APFS clone awareness)
+│   ├── src/windows/    # Windows read-only adapter (Toolhelp32, FileIdInfo, Task Scheduler XML, GlobalMemoryStatusEx)
+│   └── src/mock/       # In-memory mock platform for deterministic testing
 ├── root-guardian/      # Security engine, path canonicalization, symlink jail enforcement
 ├── root-audit/         # Rollback journaling, SHA256 integrity, transaction logs
 ├── root-storage/       # Filesystem scanner, hardlink deduplication, directory walk
@@ -313,3 +326,47 @@ flowchart TD
 - **Responsive Off-Thread Traversal**: Blocking filesystem scans execute exclusively on background threads (`InspectionWorker`).
 - **Cancellation & Stale-Result Fencing**: Atomic `CancellationToken` enables responsive cancellation, while monotonic generation IDs ensure outdated scan results never overwrite newer state.
 - **Dual Compilation Flexibility**: Headless view-model compilation by default; full native graphical window activation via `--features gtk` when host development libraries (`libgtk-4-dev`, `libadwaita-1-dev`) and `pkg-config` are installed.
+
+---
+
+## 11. Cross-Platform Inspection Engine (Phase 10: macOS & Windows)
+
+Phase 10 establishes a platform-neutral core inspection architecture and introduces native read-only platform adapters for macOS and Windows, maintaining complete isolation from Linux-specific mechanisms while preserving strict deterministic safety.
+
+```mermaid
+flowchart TD
+    subgraph CoreEngine["Platform-Neutral Core (root-core)"]
+        Paths["Platform Paths & Syntax<br>• Win Extended & UNC Normalization<br>• Case-Insensitive Matching<br>• Pseudo-FS & System Root Filtering"]
+        Identity["Resource Identity<br>• POSIX (st_dev, st_ino)<br>• Windows (Volume Serial, 128-bit File ID)"]
+        Caps["Capability Model<br>• 5-State Explicit Representation<br>• Non-Linux Baselines"]
+        Traverse["Defensive Traversal Engine<br>• Bounded Depth & Entry Limits<br>• Reparse Point & Junction Isolation<br>• Cycle Prevention"]
+    end
+
+    subgraph Adapters["Platform Adapters (root-platform)"]
+        LinuxAdapt["Linux Adapter<br>• /proc, cgroups v2, pidfd<br>• systemd user timers<br>• inotify watcher"]
+        MacAdapt["macOS Adapter<br>• libproc & sysctl<br>• launchd LaunchAgents<br>• PosixProbe & APFS awareness"]
+        WinAdapt["Windows Adapter<br>• Toolhelp32 & QueryLimitedInfo<br>• Task Scheduler XML generator<br>• FILE_FLAG_OPEN_REPARSE_POINT"]
+    end
+
+    subgraph NativeLayer["Compile-Time Resolution (root-platform::native)"]
+        NativeAccountant["NativeAccountant"]
+        NativeEnvironment["NativeEnvironment"]
+        NativeFilesystem["NativeFilesystem"]
+        NativeProcess["NativeProcess"]
+        NativeScheduler["NativeScheduler"]
+    end
+
+    CoreEngine --> Adapters
+    Adapters --> NativeLayer
+```
+
+### Architectural Guarantees:
+- **Single Crate Architecture**: Platform adapters are organized as sibling modules within `root-platform` (`src/linux/`, `src/macos/`, `src/windows/`, `src/mock/`), maintaining unified trait abstractions without fragmented crate dependencies.
+- **Platform-Neutral Resource Identity**: Identifiers avoid assuming POSIX `(device, inode)` pairs globally. Windows targets use 32-bit volume serial numbers paired with 128-bit file identifiers (`FILE_ID_INFO`), while POSIX platforms retain device/inode pairs.
+- **Explicit 5-State Capability Representation**: Replaces boolean capability assumptions with explicit statuses: `SupportedAndAccessible`, `PermissionRestricted`, `Unavailable`, `Unsupported`, and `NotTested`. Unsupported measurements are never reported as zero.
+- **Non-Linux Compile-Time Read-Only Safety**: The fixture mutation engine (`root-guardian::engine`, quarantine, restore) is gated behind `#[cfg(target_os = "linux")]`. Non-Linux builds contain zero mutation code paths at compile time.
+- **Reparse Point & Junction Isolation**: On Windows, every filesystem node is inspected using `FILE_FLAG_OPEN_REPARSE_POINT`. Junctions, volume mounts, symlinks, and cloud storage placeholders are inspected as leaf nodes and never descended into.
+- **APFS Clones & Extent Sharing Awareness**: On macOS, `st_blocks` allocated space does not represent reclaimable bytes due to APFS copy-on-write clones (`clonefile`) and shared extents. Storage measurements document this distinction explicitly.
+- **PID Reuse Detection Across Operating Systems**: On Linux, `/proc/[pid]/stat` start ticks prevent PID recycling. On macOS, BSD process start ticks (`pbi_start_tvsec`/`usec`) provide identity anchoring. On Windows, 64-bit creation `FILETIME` via `GetProcessTimes` validates process continuity.
+- **Advisory Locking Without File Deletion**: Replaces raw `libc::flock` calls with portable `AdvisoryLock` (`flock` on POSIX, `LockFileEx` on Windows). Lock files are never deleted to release locks, avoiding inode desynchronization races.
+- **Unprivileged User Schedulers**: Schedulers on all platforms operate strictly within unprivileged user space: systemd user units on Linux, `~/Library/LaunchAgents` on macOS, and unprivileged user tasks (`<LogonType>InteractiveToken</LogonType>`) on Windows Task Scheduler. All schedulers are disabled by default.

@@ -5,7 +5,7 @@ use root_core::{
 };
 use root_platform::{
     traits::{EnvironmentProvider, ResourceAccountant},
-    LinuxAccountant, LinuxEnvironment,
+    NativeAccountant, NativeEnvironment,
 };
 use serde::{Deserialize, Serialize};
 
@@ -31,8 +31,8 @@ pub struct StatusReport {
 }
 
 pub fn run_status(json_output: bool) -> Result<()> {
-    let env = LinuxEnvironment::new();
-    let accountant = LinuxAccountant::new();
+    let env = NativeEnvironment::new();
+    let accountant = NativeAccountant::new();
 
     let caps = accountant.get_capabilities()?;
     let mem = accountant.get_system_memory()?;

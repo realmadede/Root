@@ -10,7 +10,7 @@ use root_core::{
 use root_guardian::GuardianPolicy;
 use root_platform::{
     traits::{EnvironmentProvider, FilesystemProvider},
-    LinuxEnvironment, LinuxFilesystem,
+    NativeEnvironment, NativeFilesystem,
 };
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -51,8 +51,8 @@ pub fn run_explain(identifier: &str, json_output: bool) -> Result<()> {
 }
 
 pub fn generate_explanation(identifier: &str) -> Result<ExplainReport> {
-    let env = LinuxEnvironment::new();
-    let fs = LinuxFilesystem::new();
+    let env = NativeEnvironment::new();
+    let fs = NativeFilesystem::new();
     let policy = GuardianPolicy::new();
     let current_uid = env.current_uid();
 

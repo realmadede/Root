@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+use super::platform_paths::{
+    is_filesystem_root, protected_system_prefix, pseudo_filesystem_prefix, PlatformKind,
+};
 use crate::error::{Result, RootError};
 
 /// Calendar interval for periodic scheduled inspections.
@@ -271,36 +274,32 @@ impl ScheduleConfig {
             });
         }
 
-        if path == Path::new("/") {
+        let platform = PlatformKind::current();
+
+        if is_filesystem_root(platform, &path_str) {
             return Err(RootError::UnsafeScheduleTarget {
                 path: path.to_path_buf(),
                 reason: "Refusing to schedule scans of host root ('/')".to_string(),
             });
         }
 
-        // Prohibit pseudo-filesystems
-        let pseudo_prefixes = ["/proc", "/sys", "/dev", "/run"];
-        for prefix in &pseudo_prefixes {
-            if path_str == *prefix || path_str.starts_with(&format!("{}/", prefix)) {
-                return Err(RootError::UnsafeScheduleTarget {
-                    path: path.to_path_buf(),
-                    reason: format!("Target path resides within pseudo-filesystem '{}'", prefix),
-                });
-            }
+        // Pseudo-filesystems and device namespaces
+        if let Some(prefix) = pseudo_filesystem_prefix(platform, &path_str) {
+            return Err(RootError::UnsafeScheduleTarget {
+                path: path.to_path_buf(),
+                reason: format!("Target path resides within pseudo-filesystem '{}'", prefix),
+            });
         }
 
-        // Prohibit sensitive system hierarchies
-        let system_prefixes = ["/etc", "/boot", "/usr", "/var", "/lib", "/lib64", "/opt"];
-        for prefix in &system_prefixes {
-            if path_str == *prefix || path_str.starts_with(&format!("{}/", prefix)) {
-                return Err(RootError::UnsafeScheduleTarget {
-                    path: path.to_path_buf(),
-                    reason: format!(
-                        "Target path resides within protected system directory '{}'",
-                        prefix
-                    ),
-                });
-            }
+        // Sensitive system hierarchies for this platform
+        if let Some(prefix) = protected_system_prefix(platform, &path_str) {
+            return Err(RootError::UnsafeScheduleTarget {
+                path: path.to_path_buf(),
+                reason: format!(
+                    "Target path resides within protected system directory '{}'",
+                    prefix
+                ),
+            });
         }
 
         Ok(())

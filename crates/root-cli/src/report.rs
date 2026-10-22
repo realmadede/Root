@@ -7,7 +7,7 @@ use root_core::{
 use root_guardian::GuardianPolicy;
 use root_platform::{
     traits::{EnvironmentProvider, FilesystemProvider, ProcessProvider, ResourceAccountant},
-    LinuxAccountant, LinuxEnvironment, LinuxFilesystem, LinuxProcess, TraversalOptions,
+    NativeAccountant, NativeEnvironment, NativeFilesystem, NativeProcess, TraversalOptions,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -30,10 +30,10 @@ pub struct ComprehensiveReport {
 }
 
 pub fn run_report(target_path: Option<PathBuf>, json_output: bool) -> Result<()> {
-    let env = LinuxEnvironment::new();
-    let fs = LinuxFilesystem::new();
-    let accountant = LinuxAccountant::new();
-    let proc_provider = LinuxProcess::new();
+    let env = NativeEnvironment::new();
+    let fs = NativeFilesystem::new();
+    let accountant = NativeAccountant::new();
+    let proc_provider = NativeProcess::new();
     let policy = GuardianPolicy::new();
 
     let current_uid = env.current_uid();

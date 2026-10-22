@@ -64,8 +64,9 @@ pub struct MemoryMeasurement {
     pub pss_bytes: Option<u64>,
     /// Unique Set Size in bytes (private clean + private dirty exclusively mapped to this process).
     pub uss_bytes: Option<u64>,
-    /// Memory currently paged out to swap in bytes.
-    pub swap_bytes: u64,
+    /// Memory currently paged out to swap in bytes. `None` when the platform does not report it
+    /// per process; never zero-filled.
+    pub swap_bytes: Option<u64>,
 }
 
 impl MemoryMeasurement {
@@ -73,7 +74,7 @@ impl MemoryMeasurement {
         rss_bytes: u64,
         pss_bytes: Option<u64>,
         uss_bytes: Option<u64>,
-        swap_bytes: u64,
+        swap_bytes: Option<u64>,
     ) -> Self {
         Self {
             rss_bytes,
@@ -116,4 +117,12 @@ pub struct FilesystemUsage {
     pub available_bytes: u64,
     pub total_inodes: u64,
     pub free_inodes: u64,
+    /// Whether the filesystem reports inode counts. When `false` (for example NTFS), the two
+    /// inode fields are not measurements and must not be displayed as zero.
+    #[serde(default = "inode_accounting_default")]
+    pub inode_accounting_supported: bool,
+}
+
+fn inode_accounting_default() -> bool {
+    true
 }

@@ -5,10 +5,7 @@ use root_core::{
         ProcessEventKind,
     },
 };
-use root_platform::{
-    linux::{LinuxEnvironment, LinuxMonitorSession},
-    traits::EnvironmentProvider,
-};
+use root_platform::{traits::EnvironmentProvider, NativeEnvironment, NativeMonitorSession};
 use std::{
     path::PathBuf,
     sync::atomic::{AtomicBool, Ordering},
@@ -19,6 +16,7 @@ use crate::terminal::{format_bytes, format_percent, truncate_middle, Style};
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
+#[cfg(unix)]
 extern "C" fn sigint_handler(_: libc::c_int) {
     RUNNING.store(false, Ordering::SeqCst);
 }
@@ -48,7 +46,7 @@ pub fn run_monitor(opts: MonitorCliOptions) -> Result<()> {
     }
 
     // 2. Resolve target directories
-    let env = LinuxEnvironment::new();
+    let env = NativeEnvironment::new();
     let home = env.home_dir();
     let mut resolved_paths = Vec::new();
 
@@ -113,13 +111,14 @@ pub fn run_monitor(opts: MonitorCliOptions) -> Result<()> {
 
     // 4. Register signal handler for graceful Ctrl+C shutdown
     RUNNING.store(true, Ordering::SeqCst);
+    #[cfg(unix)]
     unsafe {
         libc::signal(libc::SIGINT, sigint_handler as *const () as usize);
         libc::signal(libc::SIGTERM, sigint_handler as *const () as usize);
     }
 
     let current_uid = env.current_uid();
-    let mut session = LinuxMonitorSession::new(scope.clone(), current_uid)?;
+    let mut session = NativeMonitorSession::new(scope.clone(), current_uid)?;
     session.start()?;
 
     if opts.json {
@@ -131,7 +130,7 @@ pub fn run_monitor(opts: MonitorCliOptions) -> Result<()> {
     Ok(())
 }
 
-fn run_monitor_json_loop(session: &mut LinuxMonitorSession) -> Result<()> {
+fn run_monitor_json_loop(session: &mut NativeMonitorSession) -> Result<()> {
     // Initial status event
     let start_event = MonitorEvent::Status {
         state: session.state(),
@@ -170,7 +169,7 @@ fn run_monitor_json_loop(session: &mut LinuxMonitorSession) -> Result<()> {
 }
 
 fn run_monitor_terminal_loop(
-    session: &mut LinuxMonitorSession,
+    session: &mut NativeMonitorSession,
     opts: &MonitorCliOptions,
 ) -> Result<()> {
     println!("================================================================================");

@@ -31,12 +31,7 @@ fn make_dummy_finding(
         target_name: target_name.to_string(),
         target_kind: TargetKind::Agent,
         rule_id: rule_id.to_string(),
-        location: ResourceLocation {
-            path,
-            canonical_path: None,
-            device_id: 100,
-            inode: 200,
-        },
+        location: ResourceLocation::new(path, None, 100, 200),
         category: ResourceCategory::AgentScratchpad,
         metadata: ResourceMetadata {
             file_type: FileType::RegularFile,
@@ -562,12 +557,7 @@ fn test_21_guardian_mutation_rejection() {
     let policy = GuardianPolicy::new();
     let target = FindingTarget::Filesystem(root_core::model::ResourceCandidate {
         id: root_core::model::ResourceId::new("test"),
-        location: ResourceLocation {
-            path: PathBuf::from("/home/user/workspace/target"),
-            canonical_path: None,
-            device_id: 1,
-            inode: 2,
-        },
+        location: ResourceLocation::new(PathBuf::from("/home/user/workspace/target"), None, 1, 2),
         category: ResourceCategory::BuildArtifact,
         metadata: ResourceMetadata {
             file_type: FileType::Directory,

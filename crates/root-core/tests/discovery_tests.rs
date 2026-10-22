@@ -245,7 +245,7 @@ fn test_discovery_lifecycle_assessment_transitions() {
             tty_nr: 0,
         },
         state: ProcessState::Running,
-        memory: MemoryMeasurement::new(50_000_000, None, None, 0),
+        memory: MemoryMeasurement::new(50_000_000, None, None, None),
         is_reparented_to_init: false,
         is_abandoned: false,
         associated_agent: None,

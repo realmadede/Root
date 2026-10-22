@@ -1,3 +1,4 @@
+#![cfg(target_os = "linux")]
 use std::{
     fs::{self, File},
     os::unix::fs::MetadataExt,

@@ -105,6 +105,7 @@ impl FilesystemProvider for MockPlatform {
             available_bytes: 450_000_000_000,
             total_inodes: 60_000_000,
             free_inodes: 50_000_000,
+            inode_accounting_supported: true,
         })
     }
 }
@@ -128,7 +129,12 @@ impl ProcessProvider for MockPlatform {
                     tty_nr: 0,
                 },
                 state: ProcessState::Sleeping,
-                memory: MemoryMeasurement::new(50_000_000, Some(35_000_000), Some(30_000_000), 0),
+                memory: MemoryMeasurement::new(
+                    50_000_000,
+                    Some(35_000_000),
+                    Some(30_000_000),
+                    None,
+                ),
                 is_reparented_to_init: true,
                 is_abandoned: true,
                 associated_agent: Some("TypeScript Server".to_string()),
@@ -144,7 +150,7 @@ impl ProcessProvider for MockPlatform {
                 50_000_000,
                 Some(35_000_000),
                 Some(30_000_000),
-                0,
+                None,
             )))
         } else {
             Ok(None)
@@ -177,6 +183,7 @@ impl ResourceAccountant for MockPlatform {
         Ok(PlatformCapabilities {
             os_name: "Mock OS".to_string(),
             kernel_version: "6.1.0-mock".to_string(),
+            platform: root_core::model::PlatformKind::Linux,
             is_linux: true,
             user_uid: self.uid,
             user_gid: self.gid,
@@ -188,6 +195,18 @@ impl ResourceAccountant for MockPlatform {
             pidfd: root_core::model::CapabilityStatus::SupportedAndAccessible,
             openat2: root_core::model::CapabilityStatus::SupportedAndAccessible,
             statx: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            process_enumeration: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            process_start_time: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            process_rss: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            process_private_memory: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            process_swap: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            system_memory: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            memory_pressure: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            file_identity: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            filesystem_events: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            scheduler: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            file_locking: root_core::model::CapabilityStatus::SupportedAndAccessible,
+            posix_ownership: root_core::model::CapabilityStatus::SupportedAndAccessible,
         })
     }
 }

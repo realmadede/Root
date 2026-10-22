@@ -29,7 +29,7 @@ gantt
     Phase 08 : Native Desktop GUI (GTK4 + libadwaita)   :done, p08, 2027-06, 2027-07
     Phase 09 : Desktop Usability & Security Validation :done, p09, 2027-07, 2027-07
     section Multiplatform & Release
-    Phase 10 : Cross-Platform Expansion (macOS, Win)    :p10, 2027-08, 2027-09
+    Phase 10 : Cross-Platform Expansion (macOS, Win)    :done, p10, 2027-08, 2027-09
     Phase 11 : Controlled Mutation Enablement           :p11, 2027-10, 2027-11
     Phase 12 : Hardening, Web, Packaging & Release      :p12, 2027-12, 2027-12
 ```
@@ -191,13 +191,25 @@ gantt
 
 ---
 
-### Phase 10: Cross-Platform Expansion (macOS & Windows)
-- **Primary Goal**: Bring Root's deterministic resource management to other platforms.
-- **Key Tasks**:
-  - Implement `root-platform-macos` (Darwin `proc_pidinfo`, launchd user agents, FSEvents).
-  - Implement `root-platform-windows` (Win32 process handles, Job Objects, Task Scheduler).
-- **Status**: NOT STARTED; PENDING HUMAN AUTHORIZATION. Scope is read-only inspection, scheduling, and monitoring parity; mutation stays disabled on every platform until Phase 11.
-- **Safety Gate**: Core engine remains identical; platform traits fully satisfied.
+### Phase 10: Cross-Platform Expansion (macOS & Windows) — COMPLETED
+- **Status**: COMPLETE
+- **Primary Goal**: Establish a platform-neutral core inspection architecture and implement read-only native platform adapters for macOS and Windows without compromising Linux functionality or introducing mutation capabilities.
+- **Key Accomplishments**:
+  - Maintained single-crate platform topology inside `root-platform` (`src/linux/`, `src/macos/`, `src/windows/`, `src/mock/`, `src/traits.rs`, `src/native.rs`).
+  - Implemented platform-neutral resource identity model (`FileIdentity`, `IdentityKind`) supporting POSIX `(device, inode)` and Windows 32-bit volume serial paired with 128-bit file IDs (`FILE_ID_INFO`), removing global dev/ino assumptions.
+  - Implemented 5-state explicit capability model (`SupportedAndAccessible`, `PermissionRestricted`, `Unavailable`, `Unsupported`, `NotTested`), eliminating zero-reporting for unsupported metrics.
+  - Implemented macOS read-only filesystem adapter with symlink protection, APFS copy-on-write clone awareness, and volume boundary enforcement via `PosixProbe`.
+  - Implemented macOS process and memory adapter using `libproc` (`proc_pidinfo`) and `sysctl`, with BSD process start ticks anchoring against PID reuse.
+  - Implemented macOS unprivileged user scheduler (`MacScheduler`, `LaunchdPlistGenerator`) generating safe, validated `~/Library/LaunchAgents` property lists.
+  - Implemented Windows read-only filesystem adapter with `FILE_FLAG_OPEN_REPARSE_POINT` isolation of directory junctions, reparse points, drive letters, UNC paths, and extended-length `\\?\` syntax.
+  - Implemented Windows process and memory adapter using Toolhelp32 snapshots and `GetProcessTimes` 64-bit creation `FILETIME` verification.
+  - Implemented Windows unprivileged user scheduler (`WindowsScheduler`, `TaskXmlGenerator`) generating least-privilege Task Scheduler definitions without administrative elevation.
+  - Implemented cross-platform advisory file locking (`AdvisoryLock`) using `libc::flock` on POSIX and `LockFileEx` on Windows without lock-file deletion.
+  - Enforced Guardian security boundary: fixture mutation engine gated behind `#[cfg(target_os = "linux")]`, ensuring non-Linux builds remain strictly read-only at compile time.
+  - Updated CLI commands (`doctor`, `status`, `scan`, `discover`, `inspect`, `monitor`, `schedule`) with platform-aware paths and capability reporting.
+  - Updated CI matrix (`.github/workflows/ci.yml`) to validate headless platform crates and tests on `macos-latest` and `windows-latest`.
+  - Added 48 unit tests covering path classification, identity mapping, advisory locks, polling monitors, and plist/XML generators, increasing passing workspace tests from 159 to 208.
+- **Safety Gate**: Core engine remains strictly deterministic and read-only; 208 workspace tests pass; zero production mutations permitted.
 
 ---
 

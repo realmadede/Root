@@ -1,6 +1,6 @@
 use crate::model::presentation::format_bytes_tabular;
 use root_platform::traits::{FilesystemProvider, ResourceAccountant};
-use root_platform::{LinuxAccountant, LinuxFilesystem};
+use root_platform::{NativeAccountant, NativeFilesystem};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -112,7 +112,7 @@ impl Default for OverviewViewModel {
 impl OverviewViewModel {
     /// Refreshes system metrics from Linux kernel interfaces.
     pub fn refresh_system_metrics(&mut self, root_path: &Path) {
-        let accountant = LinuxAccountant::new();
+        let accountant = NativeAccountant::new();
 
         // 1. Read memory metrics
         if let Ok(mem) = accountant.get_system_memory() {
@@ -144,7 +144,7 @@ impl OverviewViewModel {
         }
 
         // 3. Read filesystem capacity via FilesystemProvider
-        let fs = LinuxFilesystem::new();
+        let fs = NativeFilesystem::new();
         if let Ok(usage) = fs.get_filesystem_usage(root_path) {
             self.filesystem_capacity_bytes = usage.total_bytes;
             self.filesystem_available_bytes = usage.available_bytes;

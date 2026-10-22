@@ -1,14 +1,14 @@
 # Root: Secure System Resource Management
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform: Linux](https://img.shields.io/badge/Platform-Linux%20%7C%20GNOME%20%7C%20Wayland-red.svg)](docs/platform-abstraction.md)
+[![Platform: Linux | macOS | Windows](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-red.svg)](docs/phase-10-platform-design.md)
 [![Rust: 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](ARCHITECTURE.md)
-[![Status: Phase 09 Complete](https://img.shields.io/badge/Status-Phase%2009%20Complete-emerald.svg)](docs/phase-09-report.md)
-[![Tests: 159 Passed](https://img.shields.io/badge/Tests-159%20Passed-brightgreen.svg)](docs/phase-09-report.md)
+[![Status: Phase 10 Complete](https://img.shields.io/badge/Status-Phase%2010%20Complete-emerald.svg)](docs/phase-10-report.md)
+[![Tests: 208 Passed](https://img.shields.io/badge/Tests-208%20Passed-brightgreen.svg)](docs/phase-10-report.md)
 
-**Root** is a deterministic, lightweight, security-first Linux system utility engineered to help developers understand, audit, and safely inspect system resources accumulated through agentic and conversational coding workflows.
+**Root** is a deterministic, lightweight, security-first system utility engineered to help developers understand, audit, and safely inspect system resources accumulated through agentic and conversational coding workflows across Linux, macOS, and Windows.
 
-Unlike traditional sweepers, Root operates without AI runtimes or cloud telemetry, requires zero elevated privileges (`sudo`), respects Linux virtual memory dynamics, and provides a reversible, auditable quarantine model—recovering resources without guesswork.
+Unlike traditional sweepers, Root operates without AI runtimes or cloud telemetry, requires zero elevated privileges (`sudo` / admin), respects virtual memory dynamics, and provides a reversible, auditable quarantine model—recovering resources without guesswork.
 
 ---
 
@@ -70,7 +70,7 @@ flowchart TD
 | Crate | Responsibility | Dependencies |
 |---|---|---|
 | [**`root-core`**](crates/root-core) | Domain models (`ResourceCandidate`, `ClassificationTier`), catalog of 12 discovery rules, multi-factor lifecycle engine, and Level 1 synthetic test fixtures. | Minimal (pure Rust, `serde`) |
-| [**`root-platform`**](crates/root-platform) | Safe Linux unprivileged kernel interfaces: `/proc` parser, `statvfs` capacity, bounded traversal engine (depth limit 64, entry limit 250,000), PSI pressure sampling, non-blocking `inotify` watcher, and `systemd --user` scheduler. | `libc`, POSIX syscalls |
+| [**`root-platform`**](crates/root-platform) | Platform abstraction layer: Linux `/proc`, `statvfs`, PSI, `systemd --user` timers, and `inotify`; macOS `libproc`, `sysctl`, and `launchd` LaunchAgents; Windows Toolhelp32, Task Scheduler XML, and `FILE_FLAG_OPEN_REPARSE_POINT`; defensive bounded traversal engine; and portable advisory locking. | `libc`, POSIX syscalls, `windows-sys` (Windows) |
 | [**`root-guardian`**](crates/root-guardian) | Security enforcement: 8-factor authorization engine, 8-state transaction state machine, atomic same-filesystem relocation (`RENAME_NOREPLACE`), durable recovery journal, and self-contained SHA-256 integrity verification. | `root-core`, `root-platform` |
 | [**`root-cli`**](crates/root-cli) | Terminal application providing status overview, capability diagnostics (`doctor`), resource inspection, interactive discovery browsing, schedule configuration, and live monitoring output. | `root-core`, `root-platform`, `root-guardian`, `clap` |
 | [**`root-gui`**](crates/root-gui) | Native desktop application built with GTK4 and libadwaita adhering to Designing-Skills reference design. Features 7 dedicated navigation views and headless compilation support. | Optional `gtk4`, `libadwaita` |

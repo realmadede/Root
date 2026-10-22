@@ -3,7 +3,7 @@ use root_core::model::{FindingTarget, ProposedAction, ProtectionTier};
 use root_guardian::GuardianPolicy;
 use root_platform::traits::{EnvironmentProvider, ProcessProvider, ResourceAccountant};
 use root_platform::{
-    LinuxAccountant, LinuxEnvironment, LinuxFilesystem, LinuxProcess, TraversalOptions,
+    NativeAccountant, NativeEnvironment, NativeFilesystem, NativeProcess, TraversalOptions,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -86,10 +86,10 @@ impl InspectionWorker {
                 return;
             }
 
-            let env = LinuxEnvironment::new();
-            let fs = LinuxFilesystem::new();
-            let proc_provider = LinuxProcess::new();
-            let accountant = LinuxAccountant::new();
+            let env = NativeEnvironment::new();
+            let fs = NativeFilesystem::new();
+            let proc_provider = NativeProcess::new();
+            let accountant = NativeAccountant::new();
             let policy = GuardianPolicy::new();
 
             let current_uid = env.current_uid();

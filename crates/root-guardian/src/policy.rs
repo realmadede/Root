@@ -1,5 +1,6 @@
 use root_core::model::{
-    FindingTarget, ProposedAction, ProtectionTier, RejectionReason, SafetyDecision, ScanFinding,
+    protected_system_prefix, pseudo_filesystem_prefix, FindingTarget, PlatformKind, ProposedAction,
+    ProtectionTier, RejectionReason, SafetyDecision, ScanFinding,
 };
 use std::path::Path;
 
@@ -79,7 +80,8 @@ impl GuardianPolicy {
                 }
 
                 // Rule 3b: Path traversal and null byte rejection
-                let path_str = res.location.path.to_string_lossy();
+                // Windows separators are normalized so credential patterns match on every platform.
+                let path_str = res.location.path.to_string_lossy().replace('\\', "/");
                 if path_str.contains('\0') {
                     return SafetyDecision::reject(
                         RejectionReason::InvalidPath,
@@ -145,8 +147,17 @@ impl GuardianPolicy {
         );
     }
 
+    /// Protected locations are the union of every supported platform's rules, so a path that is
+    /// protected on any platform is rejected regardless of where Root runs.
     fn is_protected_system_location(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy();
+        for platform in [PlatformKind::MacOs, PlatformKind::Windows] {
+            if protected_system_prefix(platform, &path_str).is_some()
+                || pseudo_filesystem_prefix(platform, &path_str).is_some()
+            {
+                return true;
+            }
+        }
         path_str.starts_with("/etc")
             || path_str.starts_with("/usr")
             || path_str.starts_with("/boot")
@@ -248,6 +259,43 @@ mod tests {
                 assert_eq!(reason, RejectionReason::ProtectedLocation);
             }
             SafetyDecision::Allowed => panic!("Must reject system location"),
+        }
+    }
+
+    #[test]
+    fn rejects_windows_and_macos_system_locations_and_credentials() {
+        let policy = GuardianPolicy::new();
+        for path in [
+            "C:\\Windows\\System32\\config",
+            "D:\\Program Files\\App\\x.dll",
+            "/System/Library/CoreServices",
+            "/Library/Keychains/System.keychain",
+            "C:\\Users\\dev\\.ssh\\id_ed25519",
+        ] {
+            let (target, tier) = make_test_resource(path, 1000, ProtectionTier::SafeRecoverable);
+            match policy.evaluate(&target, tier, ProposedAction::Inspect, 1000) {
+                SafetyDecision::Rejected { reason, .. } => {
+                    assert_eq!(reason, RejectionReason::ProtectedLocation, "{path}")
+                }
+                SafetyDecision::Allowed => panic!("{path} must be rejected"),
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_user_project_paths_are_not_protected_on_any_platform() {
+        let policy = GuardianPolicy::new();
+        for path in [
+            "/home/dev/project",
+            "/Users/dev/project",
+            "C:\\Users\\dev\\project",
+        ] {
+            let (target, tier) = make_test_resource(path, 1000, ProtectionTier::SafeRecoverable);
+            assert_eq!(
+                policy.evaluate(&target, tier, ProposedAction::Inspect, 1000),
+                SafetyDecision::Allowed,
+                "{path}"
+            );
         }
     }
 }

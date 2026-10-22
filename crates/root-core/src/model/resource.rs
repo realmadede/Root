@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use super::measurement::StorageMeasurement;
+use super::{
+    identity::{FileIdentity, IdentityKind},
+    measurement::StorageMeasurement,
+};
 
 /// Strongly typed identifier for a discovered resource candidate.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -14,6 +17,12 @@ impl ResourceId {
 
     pub fn from_path_and_inode(path: &Path, device_id: u64, inode: u64) -> Self {
         Self(format!("{}:{}:{}", path.display(), device_id, inode))
+    }
+
+    /// Builds an id from a path and a platform-neutral identity. For POSIX identities the result
+    /// is identical to `from_path_and_inode`.
+    pub fn from_path_and_identity(path: &Path, identity: &FileIdentity) -> Self {
+        Self(format!("{}:{}", path.display(), identity))
     }
 
     pub fn as_str(&self) -> &str {
@@ -64,10 +73,14 @@ pub struct ResourceLocation {
     pub path: PathBuf,
     /// Canonicalized path (resolving intermediate symlinks).
     pub canonical_path: Option<PathBuf>,
-    /// Filesystem device ID (`st_dev`).
+    /// Volume identifier: `st_dev` on POSIX, volume serial number on Windows.
     pub device_id: u64,
-    /// Filesystem inode number (`st_ino`).
+    /// Object identifier: `st_ino` on POSIX, low 64 bits of the file id on Windows.
     pub inode: u64,
+    /// Which identity scheme the two fields above follow. Defaults to POSIX so previously
+    /// serialized locations remain readable.
+    #[serde(default)]
+    pub identity_kind: IdentityKind,
 }
 
 impl ResourceLocation {
@@ -77,7 +90,13 @@ impl ResourceLocation {
             canonical_path,
             device_id,
             inode,
+            identity_kind: IdentityKind::PosixDeviceInode,
         }
+    }
+
+    pub fn with_identity_kind(mut self, kind: IdentityKind) -> Self {
+        self.identity_kind = kind;
+        self
     }
 }
 

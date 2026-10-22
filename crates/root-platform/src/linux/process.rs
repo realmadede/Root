@@ -164,7 +164,7 @@ impl ProcessProvider for LinuxProcess {
                 rss_kb * 1024,
                 Some(pss_kb * 1024),
                 Some(uss_bytes),
-                swap_kb * 1024,
+                Some(swap_kb * 1024),
             )));
         }
 
@@ -193,7 +193,7 @@ impl ProcessProvider for LinuxProcess {
                 vmrss_kb * 1024,
                 None,
                 None,
-                vmswap_kb * 1024,
+                Some(vmswap_kb * 1024),
             )));
         }
 
@@ -240,7 +240,7 @@ impl ProcessProvider for LinuxProcess {
 
         let memory = self
             .get_process_memory(pid)?
-            .unwrap_or_else(|| MemoryMeasurement::new(0, None, None, 0));
+            .unwrap_or_else(|| MemoryMeasurement::new(0, None, None, None));
 
         let is_reparented_to_init = ppid == 1;
 

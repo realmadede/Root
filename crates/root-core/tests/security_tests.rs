@@ -195,7 +195,7 @@ fn test_process_identity_and_abandonment_logic() {
             tty_nr: 34816, // Non-zero TTY device number
         },
         state: ProcessState::Running,
-        memory: MemoryMeasurement::new(10_000_000, None, None, 0),
+        memory: MemoryMeasurement::new(10_000_000, None, None, None),
         is_reparented_to_init: true,
         is_abandoned: false,
         associated_agent: None,
@@ -216,7 +216,7 @@ fn test_process_identity_and_abandonment_logic() {
             tty_nr: 0, // Detached from TTY
         },
         state: ProcessState::Sleeping,
-        memory: MemoryMeasurement::new(50_000_000, Some(35_000_000), Some(30_000_000), 0),
+        memory: MemoryMeasurement::new(50_000_000, Some(35_000_000), Some(30_000_000), None),
         is_reparented_to_init: true,
         is_abandoned: true,
         associated_agent: Some("Vite Dev Server".to_string()),

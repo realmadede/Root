@@ -5,7 +5,7 @@ use root_core::{
 use root_guardian::{JournalRecord, RecoveryJournal, TransactionState};
 use root_platform::{
     traits::{EnvironmentProvider, FilesystemProvider, ProcessProvider, ResourceAccountant},
-    LinuxAccountant, LinuxEnvironment, LinuxFilesystem, LinuxProcess, TraversalOptions,
+    NativeAccountant, NativeEnvironment, NativeFilesystem, NativeProcess, TraversalOptions,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -57,7 +57,7 @@ pub struct TransactionInspectionReport {
 }
 
 pub fn run_inspect_memory(json_output: bool) -> Result<()> {
-    let accountant = LinuxAccountant::new();
+    let accountant = NativeAccountant::new();
     let mem = accountant.get_system_memory()?;
     let pressure = accountant.get_pressure_metrics()?;
 
@@ -148,8 +148,8 @@ pub fn run_inspect_memory(json_output: bool) -> Result<()> {
 }
 
 pub fn run_inspect_processes(user_only: bool, json_output: bool) -> Result<()> {
-    let env = LinuxEnvironment::new();
-    let proc_provider = LinuxProcess::new();
+    let env = NativeEnvironment::new();
+    let proc_provider = NativeProcess::new();
     let invoking_uid = env.current_uid();
 
     let pids = proc_provider.list_pids()?;
@@ -217,8 +217,8 @@ pub fn run_inspect_processes(user_only: bool, json_output: bool) -> Result<()> {
 }
 
 pub fn run_inspect_storage(target_path: Option<PathBuf>, json_output: bool) -> Result<()> {
-    let fs = LinuxFilesystem::new();
-    let env = LinuxEnvironment::new();
+    let fs = NativeFilesystem::new();
+    let env = NativeEnvironment::new();
 
     let path =
         target_path.unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| env.home_dir()));

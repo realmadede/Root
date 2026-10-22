@@ -9,7 +9,7 @@ use root_core::{
 use root_guardian::GuardianPolicy;
 use root_platform::{
     traits::{EnvironmentProvider, ResourceAccountant},
-    DiscoveredEntry, LinuxAccountant, LinuxEnvironment, LinuxFilesystem, TraversalOptions,
+    DiscoveredEntry, NativeAccountant, NativeEnvironment, NativeFilesystem, TraversalOptions,
 };
 use std::path::{Path, PathBuf};
 
@@ -19,9 +19,9 @@ pub fn run_scan(
     json_output: bool,
     _interactive: bool,
 ) -> Result<()> {
-    let env = LinuxEnvironment::new();
-    let fs = LinuxFilesystem::new();
-    let accountant = LinuxAccountant::new();
+    let env = NativeEnvironment::new();
+    let fs = NativeFilesystem::new();
+    let accountant = NativeAccountant::new();
     let policy = GuardianPolicy::new();
 
     let current_uid = env.current_uid();

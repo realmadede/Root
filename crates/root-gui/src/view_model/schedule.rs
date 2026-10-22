@@ -1,7 +1,7 @@
 use root_core::model::{
     InspectionProfile, ScheduleConfig, ScheduleHistoryEntry, ScheduleInterval, ScheduleRunStatus,
 };
-use root_platform::linux::LinuxScheduler;
+use root_platform::{traits::Scheduler, NativeScheduler};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
@@ -87,11 +87,11 @@ impl ScheduleViewModel {
         }
     }
 
-    /// Loads schedule status from the Linux platform scheduler and XDG directories.
+    /// Loads schedule status from the platform scheduler and configuration.
     pub fn refresh_from_system(&mut self) {
-        let scheduler = LinuxScheduler::new();
-        self.systemd_available = scheduler.is_systemd_user_available();
-        self.next_trigger_display = scheduler.query_next_trigger();
+        let scheduler = NativeScheduler::new();
+        self.systemd_available = scheduler.backend_available();
+        self.next_trigger_display = scheduler.next_trigger();
 
         // 1. Load config if present
         let config_path = Self::get_config_path();

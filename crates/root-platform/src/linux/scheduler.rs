@@ -1,6 +1,6 @@
 use root_core::{
     error::{Result, RootError},
-    model::{validate_executable, ScheduleInterval, ScheduleRunStatus},
+    model::{validate_executable, ScheduleInterval},
 };
 use std::{
     fs::{self, Permissions},
@@ -517,72 +517,56 @@ impl LinuxScheduler {
     }
 }
 
-/// Linux desktop notification dispatcher utilizing FreeDesktop mechanisms (`notify-send` or D-Bus).
-pub struct DesktopNotifier;
-
-impl DesktopNotifier {
-    /// Computes a privacy-safe cryptographic fingerprint of aggregate inspection findings.
-    ///
-    /// Uses only summary counters and status; never incorporates file paths or names.
-    pub fn compute_fingerprint(
-        status: ScheduleRunStatus,
-        total_inspected: u64,
-        total_findings: usize,
-    ) -> String {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let payload = format!(
-            "{}:{}:{}",
-            status.display_badge(),
-            total_inspected,
-            total_findings
-        );
-        let mut hasher = DefaultHasher::new();
-        payload.hash(&mut hasher);
-        format!("{:016x}", hasher.finish())
+impl crate::traits::Scheduler for LinuxScheduler {
+    fn backend_name(&self) -> &'static str {
+        "systemd user timer"
     }
 
-    /// Dispatches a notification to the local desktop notification service with deduplication.
-    pub fn dispatch(title: &str, body: &str, urgency: &str) -> Result<bool> {
-        let clean_title = title.replace('\n', " ").replace('\r', "");
-        let clean_body = body.replace('\r', "");
-
-        let res = Command::new("notify-send")
-            .arg("-a")
-            .arg("Root")
-            .arg("-u")
-            .arg(urgency)
-            .arg(&clean_title)
-            .arg(&clean_body)
-            .status();
-
-        match res {
-            Ok(status) if status.success() => Ok(true),
-            _ => Self::dispatch_dbus(&clean_title, &clean_body),
-        }
+    fn backend_available(&self) -> bool {
+        self.is_systemd_user_available()
     }
 
-    fn dispatch_dbus(title: &str, body: &str) -> Result<bool> {
-        let res = Command::new("dbus-send")
-            .arg("--session")
-            .arg("--dest=org.freedesktop.Notifications")
-            .arg("--type=method_call")
-            .arg("/org/freedesktop/Notifications")
-            .arg("org.freedesktop.Notifications.Notify")
-            .arg("string:Root")
-            .arg("uint32:0")
-            .arg("string:")
-            .arg(format!("string:{}", title))
-            .arg(format!("string:{}", body))
-            .arg("array:string:")
-            .arg("dict:string:variant:")
-            .arg("int32:5000")
-            .status();
+    fn install(
+        &self,
+        exec_path: &Path,
+        interval: &ScheduleInterval,
+        catch_up: bool,
+        ac_power_only: bool,
+    ) -> Result<()> {
+        self.install_units_transactional(exec_path, interval, catch_up, ac_power_only)
+    }
 
-        match res {
-            Ok(status) if status.success() => Ok(true),
-            _ => Ok(false),
-        }
+    fn uninstall(&self) -> Result<()> {
+        self.uninstall_units()
+    }
+
+    fn enable(&self) -> Result<()> {
+        self.enable_timer()
+    }
+
+    fn disable(&self) -> Result<()> {
+        self.disable_timer()
+    }
+
+    fn is_active(&self) -> bool {
+        self.is_timer_active()
+    }
+
+    fn next_trigger(&self) -> Option<String> {
+        self.query_next_trigger()
+    }
+
+    fn artifact_paths(&self) -> Vec<PathBuf> {
+        vec![self.service_unit_path(), self.timer_unit_path()]
+    }
+
+    fn ac_power_connected(&self) -> Option<bool> {
+        Some(Self::is_ac_power_connected())
+    }
+
+    fn memory_pressure_high(&self, stall_threshold_pct: f64) -> Option<bool> {
+        Some(Self::is_memory_pressure_high(stall_threshold_pct))
     }
 }
+
+pub use crate::notify::DesktopNotifier;

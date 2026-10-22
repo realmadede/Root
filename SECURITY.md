@@ -21,7 +21,10 @@ Root is designed from the ground up as a **zero-elevated-privilege utility**.
 | **Ownership Verification** | Independently validates `st_uid == getuid()` and process UID. Root strictly ignores resources owned by other users or the operating system. |
 | **Hard Links** | Correctly distinguishes between in-place mutation hazards and safe unlinking. Tracks `st_nlink > 1` for accurate reclaimed space calculation without modifying shared graphs. |
 | **Process Identity** | Validates multi-factor process identity (PID, `starttime`, executable inode, UID, `pidfd`). Recognizes that `PPID == 1` is not synonymous with abandonment. |
-| **Process Signaling** | Signals are dispatched exclusively via Linux 5.4+ `pidfd_send_signal`, eliminating PID reuse race conditions. |
+| **Process Signaling** | Signals are dispatched exclusively via Linux 5.4+ `pidfd_send_signal`, eliminating PID reuse race conditions. Process termination is disabled in production builds across all operating systems. |
+| **Cross-Platform Filesystem** | On Windows, `FILE_FLAG_OPEN_REPARSE_POINT` isolates reparse points and directory junctions without descent. On macOS, traversal strictly preserves symlink jails via `PosixProbe`. |
+| **Non-Linux Compile-Time Boundaries** | Mutation facilities (quarantine, restoration, sandbox) are gated behind `#[cfg(target_os = "linux")]`. Non-Linux builds are compiled strictly as read-only inspection utilities. |
+| **Scheduler Security** | Schedulers on all platforms (systemd user timers, `~/Library/LaunchAgents`, Windows Task Scheduler) execute strictly as unprivileged user jobs without administrative elevation, validating executable paths against shell injection. |
 | **Code Execution** | Root never executes scripts, package managers, or compilers located in scanned directories (no `npm run clean`, no `cargo clean`). |
 | **Reversibility & Conflicts** | Deletions are executed as movements into a secure local quarantine (`~/.local/state/root/quarantine/`, permissions `0700`) with cryptographic rollback journaling. Restoration conflicts are detected and safeguarded against accidental overwrites. |
 

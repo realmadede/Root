@@ -1,3 +1,4 @@
+#![cfg(target_os = "linux")]
 use std::{
     fs::{self, File},
     io::{Seek, SeekFrom, Write},

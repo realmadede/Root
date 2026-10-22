@@ -1,7 +1,7 @@
 use crate::model::presentation::{format_bytes_tabular, format_pid};
 use root_core::model::ProcessState;
 use root_platform::traits::{EnvironmentProvider, ProcessProvider};
-use root_platform::{LinuxEnvironment, LinuxProcess};
+use root_platform::{NativeEnvironment, NativeProcess};
 use serde::{Deserialize, Serialize};
 
 /// Attribution confidence level for linking a process to an AI agent or development tool.
@@ -98,8 +98,8 @@ impl ProcessesViewModel {
 
     /// Refreshes process table by querying `/proc` via `root-platform`.
     pub fn refresh(&mut self) {
-        let provider = LinuxProcess::new();
-        let my_uid = LinuxEnvironment::new().current_uid();
+        let provider = NativeProcess::new();
+        let my_uid = NativeEnvironment::new().current_uid();
 
         if let Ok(pids) = provider.list_pids() {
             let mut list = Vec::new();

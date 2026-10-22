@@ -7,7 +7,7 @@ use root_core::{
 use root_guardian::GuardianPolicy;
 use root_platform::{
     traits::{EnvironmentProvider, ProcessProvider, ResourceAccountant},
-    LinuxAccountant, LinuxEnvironment, LinuxFilesystem, LinuxProcess, TraversalOptions,
+    NativeAccountant, NativeEnvironment, NativeFilesystem, NativeProcess, TraversalOptions,
 };
 use std::path::PathBuf;
 
@@ -20,10 +20,10 @@ pub fn run_discover(
     json_output: bool,
     interactive: bool,
 ) -> Result<()> {
-    let env = LinuxEnvironment::new();
-    let fs = LinuxFilesystem::new();
-    let proc_provider = LinuxProcess::new();
-    let accountant = LinuxAccountant::new();
+    let env = NativeEnvironment::new();
+    let fs = NativeFilesystem::new();
+    let proc_provider = NativeProcess::new();
+    let accountant = NativeAccountant::new();
     let policy = GuardianPolicy::new();
 
     let current_uid = env.current_uid();

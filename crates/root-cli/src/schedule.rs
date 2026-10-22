@@ -9,17 +9,16 @@ use root_core::{
 };
 use root_guardian::policy::GuardianPolicy;
 use root_platform::{
-    linux::{
-        DesktopNotifier, LinuxAccountant, LinuxEnvironment, LinuxFilesystem, LinuxProcess,
-        LinuxScheduler, TraversalOptions,
-    },
-    traits::{EnvironmentProvider, ProcessProvider, ResourceAccountant},
+    lock::{AdvisoryLock, LockStatus},
+    notify::DesktopNotifier,
+    traits::{EnvironmentProvider, ProcessProvider, ResourceAccountant, Scheduler},
+    NativeAccountant, NativeEnvironment, NativeFilesystem, NativeProcess, NativeScheduler,
+    TraversalOptions,
 };
 use std::{
     fs::{self, File, OpenOptions},
     io::{BufReader, Write},
-    os::unix::fs::OpenOptionsExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };
 
@@ -42,26 +41,22 @@ pub struct ScheduleEnableOptions {
 }
 
 fn get_state_dir() -> PathBuf {
-    if let Ok(state_home) = std::env::var("XDG_STATE_HOME") {
-        PathBuf::from(state_home).join("root")
-    } else if let Ok(home) = std::env::var("HOME") {
-        PathBuf::from(home)
-            .join(".local")
-            .join("state")
-            .join("root")
-    } else {
-        PathBuf::from("/tmp/root_state")
-    }
+    NativeEnvironment::new().state_dir().join("root")
 }
 
 fn get_config_dir() -> PathBuf {
-    if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
-        PathBuf::from(config_home).join("root")
-    } else if let Ok(home) = std::env::var("HOME") {
-        PathBuf::from(home).join(".config").join("root")
-    } else {
-        PathBuf::from("/tmp/root_config")
+    NativeEnvironment::new().config_dir().join("root")
+}
+
+fn open_private_write(path: &Path) -> std::io::Result<File> {
+    let mut opts = OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
     }
+    opts.open(path)
 }
 
 pub fn get_schedule_config_path() -> PathBuf {
@@ -115,16 +110,10 @@ pub fn save_schedule_config(config: &ScheduleConfig) -> Result<()> {
         .map_err(|e| RootError::Serialization(e.to_string()))?;
 
     let temp_path = path.with_extension("tmp");
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&temp_path)
-        .map_err(|e| RootError::Io {
-            path: temp_path.clone(),
-            source: e,
-        })?;
+    let mut file = open_private_write(&temp_path).map_err(|e| RootError::Io {
+        path: temp_path.clone(),
+        source: e,
+    })?;
 
     file.write_all(serialized.as_bytes())
         .map_err(|e| RootError::Io {
@@ -192,16 +181,10 @@ pub fn append_schedule_history(entry: ScheduleHistoryEntry) -> Result<()> {
         .map_err(|e| RootError::Serialization(e.to_string()))?;
 
     let temp_path = path.with_extension("tmp");
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&temp_path)
-        .map_err(|e| RootError::Io {
-            path: temp_path.clone(),
-            source: e,
-        })?;
+    let mut file = open_private_write(&temp_path).map_err(|e| RootError::Io {
+        path: temp_path.clone(),
+        source: e,
+    })?;
 
     file.write_all(serialized.as_bytes())
         .map_err(|e| RootError::Io {
@@ -221,12 +204,12 @@ pub fn append_schedule_history(entry: ScheduleHistoryEntry) -> Result<()> {
 /// Queries current status of Mode B scheduled inspections.
 pub fn get_schedule_status() -> ScheduleStatus {
     let config = load_schedule_config();
-    let scheduler = LinuxScheduler::new();
+    let scheduler = NativeScheduler::new();
     let history = load_schedule_history();
 
-    let systemd_accessible = scheduler.is_systemd_user_available();
-    let timer_active = scheduler.is_timer_active();
-    let next_trigger_utc = scheduler.query_next_trigger();
+    let systemd_accessible = scheduler.backend_available();
+    let timer_active = scheduler.is_active();
+    let next_trigger_utc = scheduler.next_trigger();
 
     let last_entry = history.last();
     let last_attempt_epoch_secs = last_entry.map(|e| e.timestamp_epoch_secs);
@@ -462,11 +445,11 @@ pub fn run_schedule_list() -> Result<()> {
     Ok(())
 }
 
-/// Removes all Root systemd user units and deletes schedule configuration.
+/// Removes all Root user units and deletes schedule configuration.
 pub fn run_schedule_remove() -> Result<()> {
-    let scheduler = LinuxScheduler::new();
-    let _ = scheduler.disable_timer();
-    let _ = scheduler.uninstall_units();
+    let scheduler = NativeScheduler::new();
+    let _ = scheduler.disable();
+    let _ = scheduler.uninstall();
 
     let config_path = get_schedule_config_path();
     if config_path.exists() {
@@ -475,7 +458,10 @@ pub fn run_schedule_remove() -> Result<()> {
 
     println!(
         "{}",
-        Style::green("Root systemd user units and schedule configuration completely removed.")
+        Style::green(&format!(
+            "Root {} units and schedule configuration completely removed.",
+            scheduler.backend_name()
+        ))
     );
 
     Ok(())
@@ -632,28 +618,30 @@ pub fn run_schedule_enable(opts: ScheduleEnableOptions) -> Result<()> {
     save_schedule_config(&config)?;
 
     // 8. Transactional unit installation
-    let scheduler = LinuxScheduler::new();
-    scheduler.install_units_transactional(
+    let scheduler = NativeScheduler::new();
+    scheduler.install(
         &exec_path,
         &config.interval,
         config.catch_up,
         config.ac_power_only,
     )?;
 
-    if scheduler.is_systemd_user_available() {
-        scheduler.enable_timer()?;
+    if scheduler.backend_available() {
+        scheduler.enable()?;
         println!(
             "{}",
-            Style::green(
-                "Mode B scheduled inspection successfully enabled and timer activated (root-inspect.timer)."
-            )
+            Style::green(&format!(
+                "Mode B scheduled inspection successfully enabled and {} activated.",
+                scheduler.backend_name()
+            ))
         );
     } else {
         println!(
             "{}",
-            Style::yellow(
-                "Notice: systemd user manager is not active in this session. Units generated successfully."
-            )
+            Style::yellow(&format!(
+                "Notice: {} is not active in this session. Units generated successfully.",
+                scheduler.backend_name()
+            ))
         );
     }
 
@@ -671,14 +659,15 @@ pub fn run_schedule_disable() -> Result<()> {
 
     save_schedule_config(&config)?;
 
-    let scheduler = LinuxScheduler::new();
-    let _ = scheduler.disable_timer();
+    let scheduler = NativeScheduler::new();
+    let _ = scheduler.disable();
 
     println!(
         "{}",
-        Style::green(
-            "Scheduled inspections disabled. Systemd user timer stopped. Config preserved."
-        )
+        Style::green(&format!(
+            "Scheduled inspections disabled. {} stopped. Config preserved.",
+            scheduler.backend_name()
+        ))
     );
 
     Ok(())
@@ -699,24 +688,9 @@ pub fn run_schedule_run(dry_run: bool, notify: bool) -> Result<()> {
     let _ = fs::create_dir_all(&state_dir);
     let lock_path = get_schedule_lock_path();
 
-    let lock_file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&lock_path)
-        .map_err(|e| RootError::Io {
-            path: lock_path.clone(),
-            source: e,
-        })?;
-
-    // Try acquiring flock without blocking
-    unsafe {
-        if libc::flock(
-            std::os::unix::io::AsRawFd::as_raw_fd(&lock_file),
-            libc::LOCK_EX | libc::LOCK_NB,
-        ) != 0
-        {
+    let _lock_guard = match AdvisoryLock::try_acquire(&lock_path)? {
+        LockStatus::Acquired(guard) => guard,
+        LockStatus::Contended => {
             println!("Notice: Another Root scheduled inspection is already running. Skipping overlapping execution.");
             record_history_entry(HistoryRecordParams {
                 status: ScheduleRunStatus::Deferred,
@@ -734,30 +708,36 @@ pub fn run_schedule_run(dry_run: bool, notify: bool) -> Result<()> {
             });
             return Ok(());
         }
-    }
+    };
+
+    let scheduler = NativeScheduler::new();
 
     // 2. Preflight check: Battery awareness
-    if config.ac_power_only && !LinuxScheduler::is_ac_power_connected() {
-        println!("Notice: System running on battery power and AC-only scheduling is configured. Deferring scan.");
-        record_history_entry(HistoryRecordParams {
-            status: ScheduleRunStatus::Deferred,
-            profile: config.profile,
-            targets: &config.targets,
-            total_inspected: 0,
-            total_findings: 0,
-            reclaimable_bytes: 0,
-            start_time,
-            notification_sent: false,
-            error_message: Some(
-                "Deferred: System running on battery power (AC-only mode)".to_string(),
-            ),
-        });
-        return Ok(());
+    if config.ac_power_only {
+        if let Some(on_ac) = scheduler.ac_power_connected() {
+            if !on_ac {
+                println!("Notice: System running on battery power and AC-only scheduling is configured. Deferring scan.");
+                record_history_entry(HistoryRecordParams {
+                    status: ScheduleRunStatus::Deferred,
+                    profile: config.profile,
+                    targets: &config.targets,
+                    total_inspected: 0,
+                    total_findings: 0,
+                    reclaimable_bytes: 0,
+                    start_time,
+                    notification_sent: false,
+                    error_message: Some(
+                        "Deferred: System running on battery power (AC-only mode)".to_string(),
+                    ),
+                });
+                return Ok(());
+            }
+        }
     }
 
     // 3. Preflight check: System memory pressure
     if let Some(threshold) = config.max_memory_pressure_pct {
-        if LinuxScheduler::is_memory_pressure_high(threshold) {
+        if scheduler.memory_pressure_high(threshold).unwrap_or(false) {
             println!("Notice: System memory pressure exceeds safe threshold. Deferring scan.");
             record_history_entry(HistoryRecordParams {
                 status: ScheduleRunStatus::Deferred,
@@ -779,14 +759,14 @@ pub fn run_schedule_run(dry_run: bool, notify: bool) -> Result<()> {
     let targets = if !config.targets.is_empty() {
         config.targets.clone()
     } else {
-        let env = LinuxEnvironment::new();
+        let env = NativeEnvironment::new();
         vec![env.home_dir()]
     };
 
-    let env = LinuxEnvironment::new();
-    let fs = LinuxFilesystem::new();
-    let proc_provider = LinuxProcess::new();
-    let accountant = LinuxAccountant::new();
+    let env = NativeEnvironment::new();
+    let fs = NativeFilesystem::new();
+    let proc_provider = NativeProcess::new();
+    let accountant = NativeAccountant::new();
     let policy = GuardianPolicy::new();
 
     let current_uid = env.current_uid();

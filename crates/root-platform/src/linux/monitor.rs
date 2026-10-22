@@ -334,6 +334,28 @@ impl Drop for InotifyWatcher {
     }
 }
 
+impl crate::traits::FsEventSource for InotifyWatcher {
+    fn backend_name(&self) -> &'static str {
+        "inotify"
+    }
+
+    fn add_tree(&mut self, root: &Path, degraded: &mut Vec<DegradedReason>) -> Result<usize> {
+        self.add_watch_tree(root, degraded)
+    }
+
+    fn poll(
+        &mut self,
+        agent_filter: Option<&str>,
+        degraded: &mut Vec<DegradedReason>,
+    ) -> Result<Vec<LiveFsEvent>> {
+        self.read_events(agent_filter, degraded)
+    }
+
+    fn active_watches(&self) -> usize {
+        self.active_watch_count()
+    }
+}
+
 /// Lightweight periodic process table observer.
 pub struct ProcessObserver {
     process_provider: LinuxProcess,
