@@ -4,7 +4,7 @@
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux%20%7C%20GNOME%20%7C%20Wayland-red.svg)](docs/platform-abstraction.md)
 [![Rust: 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](ARCHITECTURE.md)
 [![Status: Phase 09 Complete](https://img.shields.io/badge/Status-Phase%2009%20Complete-emerald.svg)](docs/phase-09-report.md)
-[![Tests: 169 Passed](https://img.shields.io/badge/Tests-169%20Passed-brightgreen.svg)](docs/phase-09-report.md)
+[![Tests: 159 Passed](https://img.shields.io/badge/Tests-159%20Passed-brightgreen.svg)](docs/phase-09-report.md)
 
 **Root** is a deterministic, lightweight, security-first Linux system utility engineered to help developers understand, audit, and safely inspect system resources accumulated through agentic and conversational coding workflows.
 
@@ -121,7 +121,7 @@ cargo build -p root-cli
 Root maintains a comprehensive automated test suite across synthetic sandboxes, simulated adversarial filesystems, and view models:
 
 ```bash
-# Run all 169 workspace tests
+# Run all 159 workspace tests
 cargo test --workspace
 
 # Run headless tests without display server dependencies
@@ -241,11 +241,11 @@ The desktop application provides seven dedicated views:
 
 Root has completed **Phase 09: Native Desktop Integration, Usability and Security Validation**.
 
-All core platform engines, discovery rules, security authorization layers, scheduled background timers, live event monitoring watchers, and native GTK4/libadwaita graphical views are fully implemented, verified, and backed by 169 passing automated tests.
+All core platform engines, discovery rules, security authorization layers, scheduled background timers, live event monitoring watchers, and native GTK4/libadwaita graphical views are fully implemented, verified, and backed by 159 passing automated tests.
 
-The project is currently positioned at the Phase 09 review gate, with work preparing for **Phase 10: Cross-Platform Expansion (macOS & Windows)** and **Phase 11: 1.0 Production Hardening, Packaging & SHA-256 Distribution**.
+The project is currently positioned at the Phase 09 review gate, with no later phase started. Next, pending human authorization: **Phase 10: Cross-Platform Expansion (macOS & Windows)**, **Phase 11: Controlled Mutation Enablement**, and **Phase 12: 1.0 Production Hardening, Packaging & SHA-256 Distribution**. The Guardian quarantine engine is implemented and tested, but all user-facing commands remain read-only until Phase 11.
 
-Under Phase 11, users will no longer need to clone the repository or maintain a local Rust toolchain; pre-compiled standalone release binaries will be published directly to GitHub Releases alongside official `SHA256SUMS` manifests and cryptographic signatures for deterministic integrity verification. An official project landing website and documentation portal will accompany the release—providing interactive terminal demonstrations, architecture guides, and direct download links.
+Under Phase 12, users will no longer need to clone the repository or maintain a local Rust toolchain; pre-compiled standalone release binaries will be published directly to GitHub Releases alongside official `SHA256SUMS` manifests and cryptographic signatures for deterministic integrity verification. An official project landing website and documentation portal will accompany the release—providing interactive terminal demonstrations, architecture guides, and direct download links.
 
 ---
 

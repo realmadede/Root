@@ -213,11 +213,11 @@ Static analysis & repository invariants:
 
 ## 15. Remaining Defects & Known Limitations
 
-1. **Packaging Prerequisites**: Full `.deb` and Flatpak distribution manifests require downstream build tools (`cargo-deb`, `flatpak-builder`), which are scheduled for Phase 11.
+1. **Packaging Prerequisites**: Full `.deb` and Flatpak distribution manifests require downstream build tools (`cargo-deb`, `flatpak-builder`), which are scheduled for Phase 12.
 2. **Process Table CPU Column**: Currently, process inspection surveys RSS memory consumption and states. Real-time CPU percentage per process requires historical delta sampling over two consecutive `/proc/[pid]/stat` reads, which will be integrated during production profiling.
 
 ---
 
-## 16. Phase 10 Readiness Assessment
+## 16. Next Phase Readiness Assessment
 
-Root's native desktop application is fully verified, stable, responsive, and secure. The application is ready for Phase 10 (Cross-Platform Expansion to macOS & Windows) or subsequent packaging phases upon human authorization.
+Root's native desktop application is fully verified, stable, responsive, and secure. The roadmap was subsequently reordered: Phase 10 is Cross-Platform Expansion (macOS & Windows), Phase 11 is Controlled Mutation Enablement, and Phase 12 is Production Hardening and Release. Each requires human authorization before starting.

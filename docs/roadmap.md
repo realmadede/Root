@@ -29,8 +29,9 @@ gantt
     Phase 08 : Native Desktop GUI (GTK4 + libadwaita)   :done, p08, 2027-06, 2027-07
     Phase 09 : Desktop Usability & Security Validation :done, p09, 2027-07, 2027-07
     section Multiplatform & Release
-    Phase 10 : Cross-Platform Expansion (macOS, Win)    :active, p10, 2027-08, 2027-09
-    Phase 11 : Hardening, Web, Packaging & Release      :p11, 2027-10, 2027-10
+    Phase 10 : Cross-Platform Expansion (macOS, Win)    :p10, 2027-08, 2027-09
+    Phase 11 : Controlled Mutation Enablement           :p11, 2027-10, 2027-11
+    Phase 12 : Hardening, Web, Packaging & Release      :p12, 2027-12, 2027-12
 ```
 
 ---
@@ -195,11 +196,30 @@ gantt
 - **Key Tasks**:
   - Implement `root-platform-macos` (Darwin `proc_pidinfo`, launchd user agents, FSEvents).
   - Implement `root-platform-windows` (Win32 process handles, Job Objects, Task Scheduler).
+- **Status**: NOT STARTED; PENDING HUMAN AUTHORIZATION. Scope is read-only inspection, scheduling, and monitoring parity; mutation stays disabled on every platform until Phase 11.
 - **Safety Gate**: Core engine remains identical; platform traits fully satisfied.
 
 ---
 
-### Phase 11: 1.0 Production Hardening, Packaging, SHA-256 Distribution & Security Audit
+### Phase 11: Controlled Mutation Enablement — NOT STARTED
+- **Status**: PENDING HUMAN AUTHORIZATION (design documented only; no implementation)
+- **Primary Goal**: Expose the already-built Guardian quarantine engine to users through explicit, confirmed, reversible commands. Through Phase 09 the engine exists and is tested against synthetic fixtures, but the production CLI, scheduler, monitor, and GUI are strictly read-only and Guardian rejects every mutating request issued from them.
+- **Current State (verified in Phase 09)**:
+  - Implemented in `root-guardian`: 8-factor authorization, 8-state transaction state machine, `RENAME_NOREPLACE` same-filesystem relocation, SHA-256 recovery journal, rollback.
+  - Not implemented: any production command or GUI control that invokes it. `clean`, `quarantine`, `restore`, `delete`, and `prune` are rejected by explicit guardrails in `root-cli`.
+- **Scope Note**: Runs after Phase 10, so the mutation contract (quarantine relocation, journal, locking, process termination) is specified against the `root-platform` traits and implemented for each supported platform, rather than Linux only. Linux remains the reference implementation.
+- **Planned Tasks** (to be refined in a Phase 11 design document before any code):
+  - Introduce `root quarantine <resource-id>` and `root restore <transaction-id>` with a mandatory dry-run preview and an explicit confirmation step; no implicit or bulk deletion.
+  - Define the lifecycle of quarantined data (retention, expiry, permanent purge) in `docs/cleanup-policy.md` under the Quarantine-First policy; permanent deletion remains a separate, later decision.
+  - Acquire the single-writer lock (`$XDG_STATE_HOME/root/root.lock`) for every mutation; scheduled (Mode B) and monitor (Mode C) paths remain permanently read-only.
+  - Process termination (via `pidfd_open` and `pidfd_send_signal`) is evaluated separately and stays disabled unless explicitly approved.
+  - GUI mutation controls only after CLI behavior is verified, following the Designing-Skills confirmation patterns.
+  - Re-run threat model review (`docs/threat-model.md`) for the newly reachable mutation paths.
+- **Safety Gate**: All destructive tests run only against Level 1 synthetic fixtures, Level 2 rootless containers, or Level 3 disposable VMs; crash-recovery and rollback verified; protected tiers (transcripts, credentials, dirty Git trees) proven unreachable by any mutation path; Guardian remains the sole mutation authority.
+
+---
+
+### Phase 12: 1.0 Production Hardening, Packaging, SHA-256 Distribution & Security Audit
 - **Primary Goal**: Publish audited, production-grade open source releases distributed via GitHub Releases, native system packages, and cryptographic verification manifests.
 - **Key Tasks**:
   - **Standalone GitHub Release Binaries**:
