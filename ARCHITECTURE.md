@@ -75,7 +75,16 @@ crates/
 │   ├── src/macos/      # macOS read-only adapter (libproc, sysctl, launchd LaunchAgents, APFS clone awareness)
 │   ├── src/windows/    # Windows read-only adapter (Toolhelp32, FileIdInfo, Task Scheduler XML, GlobalMemoryStatusEx)
 │   └── src/mock/       # In-memory mock platform for deterministic testing
-├── root-guardian/      # Security engine, path canonicalization, symlink jail enforcement
+├── root-guardian/      # Security engine, 11-stage decision pipeline, parent pinning, streaming SHA-256
+│   ├── src/authorization.rs # 11-stage pipeline, ConsentRecord, parent dir pinning, revalidate_full
+│   ├── src/crypto.rs        # Incremental FIPS 180-4 streaming Sha256Hasher, sha256_stream (64 KiB)
+│   ├── src/engine.rs        # TransactionEngine coordinating multi-stage quarantine & restoration
+│   ├── src/journal.rs       # Append-only JSON Lines recovery journal with directory metadata sync
+│   ├── src/policy.rs        # 4-tier protection rules & SafetyDecision engine
+│   ├── src/quarantine.rs    # Isolated quarantine store (0700 permissions)
+│   ├── src/restoration.rs   # Conflict-aware atomic restoration engine
+│   ├── src/sandbox.rs       # Level 1 synthetic fixture sandbox bounds enforcement
+│   └── src/transaction.rs   # 8-state transaction state machine with validated transition legality
 ├── root-audit/         # Rollback journaling, SHA256 integrity, transaction logs
 ├── root-storage/       # Filesystem scanner, hardlink deduplication, directory walk
 ├── root-memory/        # PSS/USS computation, PSI memory pressure monitoring

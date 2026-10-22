@@ -213,21 +213,21 @@ gantt
 
 ---
 
-### Phase 11: Controlled Mutation Enablement — NOT STARTED
-- **Status**: PENDING HUMAN AUTHORIZATION (design documented only; no implementation)
-- **Primary Goal**: Expose the already-built Guardian quarantine engine to users through explicit, confirmed, reversible commands. Through Phase 09 the engine exists and is tested against synthetic fixtures, but the production CLI, scheduler, monitor, and GUI are strictly read-only and Guardian rejects every mutating request issued from them.
-- **Current State (verified in Phase 09)**:
-  - Implemented in `root-guardian`: 8-factor authorization, 8-state transaction state machine, `RENAME_NOREPLACE` same-filesystem relocation, SHA-256 recovery journal, rollback.
-  - Not implemented: any production command or GUI control that invokes it. `clean`, `quarantine`, `restore`, `delete`, and `prune` are rejected by explicit guardrails in `root-cli`.
-- **Scope Note**: Runs after Phase 10, so the mutation contract (quarantine relocation, journal, locking, process termination) is specified against the `root-platform` traits and implemented for each supported platform, rather than Linux only. Linux remains the reference implementation.
-- **Planned Tasks** (to be refined in a Phase 11 design document before any code):
-  - Introduce `root quarantine <resource-id>` and `root restore <transaction-id>` with a mandatory dry-run preview and an explicit confirmation step; no implicit or bulk deletion.
-  - Define the lifecycle of quarantined data (retention, expiry, permanent purge) in `docs/cleanup-policy.md` under the Quarantine-First policy; permanent deletion remains a separate, later decision.
-  - Acquire the single-writer lock (`$XDG_STATE_HOME/root/root.lock`) for every mutation; scheduled (Mode B) and monitor (Mode C) paths remain permanently read-only.
-  - Process termination (via `pidfd_open` and `pidfd_send_signal`) is evaluated separately and stays disabled unless explicitly approved.
-  - GUI mutation controls only after CLI behavior is verified, following the Designing-Skills confirmation patterns.
-  - Re-run threat model review (`docs/threat-model.md`) for the newly reachable mutation paths.
-- **Safety Gate**: All destructive tests run only against Level 1 synthetic fixtures, Level 2 rootless containers, or Level 3 disposable VMs; crash-recovery and rollback verified; protected tiers (transcripts, credentials, dirty Git trees) proven unreachable by any mutation path; Guardian remains the sole mutation authority.
+### Phase 11: Production Mutation Security Architecture & Adversarial Validation — COMPLETED
+- **Status**: COMPLETE
+- **Primary Goal**: Design, implement in isolated test environments, and rigorously validate Root's production mutation security architecture without enabling production cleanup.
+- **Key Accomplishments**:
+  - Comprehensive threat model (`docs/phase-11-mutation-threat-model.md`) analyzing 26 threat vectors with formal preconditions, impacts, mitigations, residual risks, and test mappings.
+  - Formal authorization model (`docs/phase-11-authorization-model.md`) implementing an 11-stage serial decision pipeline, 4-tier protection rules, 8-factor authorization, and parent directory pinning.
+  - Transaction durability specification (`docs/phase-11-transaction-guarantees.md`) detailing the 8-state lifecycle machine, ordered journal durability protocol, conflict-aware restoration, and streaming SHA-256 integrity.
+  - Platform mutation readiness matrix (`docs/phase-11-platform-mutation-matrix.md`) assessing Linux, macOS, and Windows capabilities across 9 operational domains.
+  - Pure Rust streaming SHA-256 hasher (`Sha256Hasher`, `sha256_stream`) processing files in 64 KiB chunks with continuous file descriptor revalidation, verified against FIPS 180-4 / NIST CAVP vectors.
+  - Cryptographic consent records (`ConsentRecord`) binding single-use nonces, target resource IDs, exact canonical paths, approved action constraints, and Unix epoch expiration timestamps.
+  - Hard link shared storage protection rejecting multi-link targets (`st_nlink > 1`) unless explicit multi-link consent is granted.
+  - Sandbox scope containment asserting canonical boundary containment across relative, absolute, and symlinked target paths.
+  - Comprehensive adversarial test suite (`crates/root-guardian/tests/guardian_adversarial_tests.rs`) covering 32 test scenarios (30 threat vectors + 2 pipeline ordering tests), expanding passing workspace tests from 208 to 240.
+  - Automated continuous assurance script (`.github/scripts/check_invariants.py`) enforcing 11 repository invariants including emoji prohibition, confidentiality, headless isolation, CLI mutation exclusion, and unprivileged execution.
+- **Safety Gate**: Production mutation remains completely disabled across all operating systems, CLI subcommands, GUI controls, timers, and monitoring routines; 240 workspace tests pass cleanly.
 
 ---
 

@@ -85,6 +85,28 @@ pub enum RejectionReason {
     Phase04UnsupportedAction,
     /// Filesystem identity (device or inode) changed between authorization and execution.
     FilesystemIdentityChanged,
+    /// Production mutation is strictly disabled across all operating systems.
+    ProductionMutationDisabled,
+    /// Consent record has expired (TTL exceeded).
+    ConsentExpired,
+    /// Consent nonce does not match or was replayed.
+    ConsentNonceMismatch,
+    /// Resource path is outside authorized workspace root or sandbox bounds.
+    ScopeEscape,
+    /// Parent directory inode or device changed between authorization and operation.
+    ParentDirectoryChanged,
+    /// Resource is currently in active use by an agent or background process.
+    ResourceInUse,
+    /// Destination path already exists (collision protection).
+    DestinationCollision,
+    /// Cross-device relocation cannot be performed atomically.
+    CrossDeviceUnsupported,
+    /// Pre-mutation or post-mutation cryptographic hash check failed.
+    IntegrityMismatch,
+    /// Resource has multiple hard links and shared storage mutation is not permitted.
+    HardLinkShared,
+    /// Mutation engine is not supported or compiled on non-Linux platforms.
+    NonLinuxMutationUnsupported,
 }
 
 /// The outcome of evaluating a candidate against Root Guardian safety policies.

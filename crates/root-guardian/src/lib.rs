@@ -25,6 +25,7 @@ pub mod sandbox;
 #[cfg(target_os = "linux")]
 pub use authorization::{
     AuthorizationDecision, AuthorizationEngine, AuthorizationReceipt, AuthorizationRequest,
+    ConsentRecord,
 };
 pub use crypto::{sha256_digest, sha256_file, sha256_hex};
 #[cfg(target_os = "linux")]

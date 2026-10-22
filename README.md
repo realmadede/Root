@@ -3,8 +3,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Linux | macOS | Windows](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-red.svg)](docs/phase-10-platform-design.md)
 [![Rust: 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](ARCHITECTURE.md)
-[![Status: Phase 10 Complete](https://img.shields.io/badge/Status-Phase%2010%20Complete-emerald.svg)](docs/phase-10-report.md)
-[![Tests: 208 Passed](https://img.shields.io/badge/Tests-208%20Passed-brightgreen.svg)](docs/phase-10-report.md)
+[![Status: Phase 11 Complete](https://img.shields.io/badge/Status-Phase%2011%20Complete-emerald.svg)](docs/phase-11-report.md)
+[![Tests: 240 Passed](https://img.shields.io/badge/Tests-240%20Passed-brightgreen.svg)](docs/phase-11-report.md)
 
 **Root** is a deterministic, lightweight, security-first system utility engineered to help developers understand, audit, and safely inspect system resources accumulated through agentic and conversational coding workflows across Linux, macOS, and Windows.
 
@@ -71,7 +71,7 @@ flowchart TD
 |---|---|---|
 | [**`root-core`**](crates/root-core) | Domain models (`ResourceCandidate`, `ClassificationTier`), catalog of 12 discovery rules, multi-factor lifecycle engine, and Level 1 synthetic test fixtures. | Minimal (pure Rust, `serde`) |
 | [**`root-platform`**](crates/root-platform) | Platform abstraction layer: Linux `/proc`, `statvfs`, PSI, `systemd --user` timers, and `inotify`; macOS `libproc`, `sysctl`, and `launchd` LaunchAgents; Windows Toolhelp32, Task Scheduler XML, and `FILE_FLAG_OPEN_REPARSE_POINT`; defensive bounded traversal engine; and portable advisory locking. | `libc`, POSIX syscalls, `windows-sys` (Windows) |
-| [**`root-guardian`**](crates/root-guardian) | Security enforcement: 8-factor authorization engine, 8-state transaction state machine, atomic same-filesystem relocation (`RENAME_NOREPLACE`), durable recovery journal, and self-contained SHA-256 integrity verification. | `root-core`, `root-platform` |
+| [**`root-guardian`**](crates/root-guardian) | Security enforcement: 11-stage authorization pipeline, 8-factor authorization engine, 8-state transaction state machine, parent directory pinning, streaming SHA-256 integrity verification, atomic same-filesystem relocation (`RENAME_NOREPLACE`), durable recovery journal, and 32 adversarial test scenarios. | `root-core`, `root-platform` |
 | [**`root-cli`**](crates/root-cli) | Terminal application providing status overview, capability diagnostics (`doctor`), resource inspection, interactive discovery browsing, schedule configuration, and live monitoring output. | `root-core`, `root-platform`, `root-guardian`, `clap` |
 | [**`root-gui`**](crates/root-gui) | Native desktop application built with GTK4 and libadwaita adhering to Designing-Skills reference design. Features 7 dedicated navigation views and headless compilation support. | Optional `gtk4`, `libadwaita` |
 

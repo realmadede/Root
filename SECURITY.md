@@ -27,8 +27,14 @@ Root is designed from the ground up as a **zero-elevated-privilege utility**.
 | **Scheduler Security** | Schedulers on all platforms (systemd user timers, `~/Library/LaunchAgents`, Windows Task Scheduler) execute strictly as unprivileged user jobs without administrative elevation, validating executable paths against shell injection. |
 | **Code Execution** | Root never executes scripts, package managers, or compilers located in scanned directories (no `npm run clean`, no `cargo clean`). |
 | **Reversibility & Conflicts** | Deletions are executed as movements into a secure local quarantine (`~/.local/state/root/quarantine/`, permissions `0700`) with cryptographic rollback journaling. Restoration conflicts are detected and safeguarded against accidental overwrites. |
+| **11-Stage Decision Pipeline** | Every candidate is evaluated through an immutable 11-stage serial pipeline before authorization, verifying production locks, platform support, tiers, scope, symlinks, target identity, parent pinning, multi-links, resource usage, consent nonces, and pre-flight state. |
+| **Parent Directory Pinning** | Enforces device and inode verification on parent directories to prevent parent swap and rename races between evaluation and mutation. |
+| **Streaming SHA-256 Integrity** | Computes cryptographic digests in 64 KiB chunks with continuous file descriptor validation (`fstat` == `lstat`), recording hashes prior to source unlinking. |
+| **Cryptographic Consent Records** | Interactive user confirmations are bound by cryptographic nonces, target resource IDs, exact canonical paths, approved action constraints, and Unix epoch expiration timestamps (default 60s TTL). |
+| **Continuous Assurance** | Automated CI checks (`.github/scripts/check_invariants.py`) verify 11 invariants including zero emojis, headless isolation, no CLI mutation commands, no non-Linux mutation exports, no unrestricted deletions, and no hidden mutation environment variables. |
 
-For the full architectural threat model, see [docs/threat-model.md](docs/threat-model.md).
+For the full architectural threat model, see [docs/threat-model.md](docs/threat-model.md) and [docs/phase-11-mutation-threat-model.md](docs/phase-11-mutation-threat-model.md).
+For the authorization model and transaction guarantees, see [docs/phase-11-authorization-model.md](docs/phase-11-authorization-model.md) and [docs/phase-11-transaction-guarantees.md](docs/phase-11-transaction-guarantees.md).
 
 ---
 

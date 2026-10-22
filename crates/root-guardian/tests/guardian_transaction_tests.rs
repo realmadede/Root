@@ -117,6 +117,9 @@ fn test_01_symlink_escape_rejection() {
         classification: ProtectionTier::ObsoleteTransient,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: false,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: true,
     };
 
     // Must be rejected by sandbox boundary and authorization
@@ -173,6 +176,9 @@ fn test_03_resource_identity_change_rejection() {
             classification: ProtectionTier::ObsoleteTransient,
             invoking_uid: env.sandbox.operator_uid(),
             explicit_user_consent: false,
+            consent_record: None,
+            sandbox_root: None,
+            allow_multi_link: true,
         };
 
         let decision = AuthorizationEngine::authorize(&request);
@@ -230,6 +236,9 @@ fn test_05_hard_link_semantics() {
         classification: ProtectionTier::ObsoleteTransient,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: false,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: true,
     };
 
     // Quarantine origin
@@ -276,6 +285,9 @@ fn test_06_sparse_file_quarantine_and_restoration() {
         classification: ProtectionTier::SafeRecoverable,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: false,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: true,
     };
 
     // Quarantine sparse file
@@ -305,6 +317,9 @@ fn test_07_unicode_and_non_latin_filenames() {
         classification: ProtectionTier::ObsoleteTransient,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: false,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: true,
     };
 
     let tx = TransactionEngine::quarantine(&env.sandbox, &mut env.journal, &request).unwrap();
@@ -331,6 +346,9 @@ fn test_08_newline_and_special_filenames() {
         classification: ProtectionTier::ObsoleteTransient,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: false,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: true,
     };
 
     let tx = TransactionEngine::quarantine(&env.sandbox, &mut env.journal, &request).unwrap();
@@ -436,6 +454,9 @@ fn test_12_restoration_conflict_rejection() {
         classification: ProtectionTier::ObsoleteTransient,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: false,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: true,
     };
 
     let tx = TransactionEngine::quarantine(&env.sandbox, &mut env.journal, &request).unwrap();
@@ -496,6 +517,9 @@ fn test_14_permission_restrictions_rejection() {
         classification: ProtectionTier::ObsoleteTransient,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: false,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: true,
     };
 
     let res = TransactionEngine::quarantine(&env.sandbox, &mut env.journal, &request);
@@ -520,6 +544,9 @@ fn test_15_guardian_tier1_strictly_protected_rejection() {
         classification: ProtectionTier::StrictlyProtected,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: true, // Even with consent, Tier 1 MUST be rejected!
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: true,
     };
 
     let res = TransactionEngine::quarantine(&env.sandbox, &mut env.journal, &request);
@@ -561,6 +588,9 @@ fn test_16_sandbox_escape_attempts_rejection() {
         classification: ProtectionTier::ObsoleteTransient,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: false,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: true,
     };
 
     let res = TransactionEngine::quarantine(&env.sandbox, &mut env.journal, &request);

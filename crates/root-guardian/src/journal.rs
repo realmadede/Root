@@ -73,6 +73,13 @@ impl RecoveryJournal {
             source: e,
         })?;
 
+        // Synchronize parent directory metadata where supported
+        if let Some(parent) = self.journal_path.parent() {
+            if let Ok(pfile) = File::open(parent) {
+                let _ = pfile.sync_all();
+            }
+        }
+
         Ok(())
     }
 

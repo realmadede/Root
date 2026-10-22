@@ -89,6 +89,9 @@ fn test_followup_directory_replacement_symlink_race() {
         classification: ProtectionTier::UserConfirmRequired,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: true,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: false,
     };
 
     let auth_res = AuthorizationEngine::authorize(&request);
@@ -256,6 +259,9 @@ fn test_followup_authorization_boundaries_unconditional_denial() {
         classification: ProtectionTier::StrictlyProtected,
         invoking_uid: env.sandbox.operator_uid(),
         explicit_user_consent: true,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: false,
     };
     let decision = AuthorizationEngine::authorize(&req_tier1);
     assert!(
@@ -270,6 +276,9 @@ fn test_followup_authorization_boundaries_unconditional_denial() {
         classification: ProtectionTier::UserConfirmRequired,
         invoking_uid: 9999, // Foreign UID
         explicit_user_consent: true,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: false,
     };
     let decision_foreign = AuthorizationEngine::authorize(&req_foreign);
     assert!(

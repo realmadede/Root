@@ -85,6 +85,17 @@ impl TransactionEngine {
         let expected_dev = meta.dev();
         let expected_ino = meta.ino();
 
+        let (expected_parent_dev, expected_parent_ino) = match source_path.parent() {
+            Some(p) => {
+                let pmeta = fs::symlink_metadata(p).map_err(|e| RootError::Io {
+                    path: p.to_path_buf(),
+                    source: e,
+                })?;
+                (Some(pmeta.dev()), Some(pmeta.ino()))
+            }
+            None => (None, None),
+        };
+
         // Allocate collision-resistant quarantine path
         let quarantine_path = QuarantineStore::allocate_quarantine_path(
             sandbox,
@@ -116,11 +127,14 @@ impl TransactionEngine {
         journal.append(&prepared_record)?;
 
         // 5. TOCTOU Defense: Revalidate immediately before physical rename
-        if let Err(rejection) = AuthorizationEngine::revalidate_before_mutation(
+        if let Err(rejection) = AuthorizationEngine::revalidate_full(
             source_path,
             expected_dev,
             expected_ino,
             sandbox.operator_uid(),
+            expected_parent_dev,
+            expected_parent_ino,
+            Some(sandbox.root()),
         ) {
             ctx.fail(format!(
                 "Pre-mutation TOCTOU revalidation failed: {:?}",

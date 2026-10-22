@@ -1,5 +1,6 @@
 pub mod capabilities;
 pub mod classification;
+pub mod eligibility;
 pub mod finding;
 pub mod identity;
 pub mod measurement;
@@ -12,6 +13,7 @@ pub mod schedule;
 
 pub use capabilities::{CapabilityStatus, PlatformCapabilities};
 pub use classification::{ProposedAction, ProtectionTier, RejectionReason, SafetyDecision};
+pub use eligibility::{DecisionStage, EligibilityStatus};
 pub use finding::{FindingTarget, ScanFinding, ScanReport, ScanSummary};
 pub use identity::{FileIdentity, IdentityKind};
 pub use measurement::{
