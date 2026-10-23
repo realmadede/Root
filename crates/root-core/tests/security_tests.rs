@@ -289,6 +289,7 @@ fn test_synthetic_fixtures_adversarial_coverage() {
     // 1. Unusual names: spaces, unicode, quotes, dashes
     assert!(root.join("unusual_names/file with spaces.log").exists());
     assert!(root.join("unusual_names/файл-тест-отчет.dat").exists());
+    #[cfg(unix)]
     assert!(root.join("unusual_names/\"quoted_name\".txt").exists());
     assert!(root.join("unusual_names/--leading-dashes.tmp").exists());
 
@@ -299,16 +300,19 @@ fn test_synthetic_fixtures_adversarial_coverage() {
     assert_eq!(std::fs::read_dir(&empty1).unwrap().count(), 0);
 
     // 3. Symlinks
-    let sym_valid = root.join("symlinks/valid_rel.txt");
-    assert!(sym_valid.is_symlink());
+    #[cfg(unix)]
+    {
+        let sym_valid = root.join("symlinks/valid_rel.txt");
+        assert!(sym_valid.is_symlink());
 
-    let sym_dangling = root.join("symlinks/dangling.txt");
-    assert!(sym_dangling.is_symlink());
-    // Dangling link target does not exist, but symlink itself exists
-    assert!(!sym_dangling.exists());
+        let sym_dangling = root.join("symlinks/dangling.txt");
+        assert!(sym_dangling.is_symlink());
+        // Dangling link target does not exist, but symlink itself exists
+        assert!(!sym_dangling.exists());
 
-    let sym_escape = root.join("symlinks/jail_escape.txt");
-    assert!(sym_escape.is_symlink());
+        let sym_escape = root.join("symlinks/jail_escape.txt");
+        assert!(sym_escape.is_symlink());
+    }
 
     // 4. Test boundary checking
     assert!(fixture.assert_within_bounds(&empty1).is_ok());
