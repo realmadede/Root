@@ -71,8 +71,9 @@ jobs:
           set -o pipefail
           cargo test --workspace --verbose -- --nocapture 2>&1 | tee test_output.txt || {
             EXIT_CODE=$?
-            echo "::error::Level 1 Synthetic Tests failed! Extracted failures:"
-            grep -E '(FAILED|panicked at|failures:)' test_output.txt -A 10 || true
+            grep -E '(FAILED|failures:)' test_output.txt -A 8 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
             exit $EXIT_CODE
           }
 
@@ -155,7 +156,8 @@ jobs:
           set -o pipefail
           cargo test --package root-core --package root-platform --verbose 2>&1 | tee test_output.txt || {
             EXIT_CODE=$?
-            echo "::error::Platform tests on ${{ matrix.os }} failed! Extracted failures:"
-            grep -E '(FAILED|panicked at|failures:)' test_output.txt -A 10 || true
+            grep -E '(FAILED|failures:)' test_output.txt -A 8 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
             exit $EXIT_CODE
           }
