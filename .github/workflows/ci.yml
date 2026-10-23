@@ -67,7 +67,14 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Execute workspace test suite
-        run: cargo test --workspace --verbose -- --nocapture
+        run: |
+          set -o pipefail
+          cargo test --workspace --verbose -- --nocapture 2>&1 | tee test_output.txt || {
+            EXIT_CODE=$?
+            echo "::error::Level 1 Synthetic Tests failed! Extracted failures:"
+            grep -E '(FAILED|panicked at|failures:)' test_output.txt -A 10 || true
+            exit $EXIT_CODE
+          }
 
   documentation:
     name: Documentation Integrity
@@ -143,4 +150,12 @@ jobs:
         run: cargo check --package root-core --package root-platform
 
       - name: Execute platform unit and contract tests
-        run: cargo test --package root-core --package root-platform --verbose
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --package root-core --package root-platform --verbose 2>&1 | tee test_output.txt || {
+            EXIT_CODE=$?
+            echo "::error::Platform tests on ${{ matrix.os }} failed! Extracted failures:"
+            grep -E '(FAILED|panicked at|failures:)' test_output.txt -A 10 || true
+            exit $EXIT_CODE
+          }

@@ -347,9 +347,12 @@ impl SyntheticFixture {
             "unusual_names/файл-тест-отчет.dat",
             b"unicode cyrillic content",
         )?;
-        self.write_file("unusual_names/\"quoted_name\".txt", b"quotes")?;
         self.write_file("unusual_names/--leading-dashes.tmp", b"dashes")?;
-        self.write_file("unusual_names/newlines\nin\nname.tmp", b"newlines")?;
+        #[cfg(unix)]
+        {
+            self.write_file("unusual_names/\"quoted_name\".txt", b"quotes")?;
+            self.write_file("unusual_names/newlines\nin\nname.tmp", b"newlines")?;
+        }
         Ok(())
     }
 
