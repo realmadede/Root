@@ -1,6 +1,7 @@
 //! Cross-platform desktop notification dispatcher and privacy-safe fingerprinting.
 
 use root_core::{error::Result, model::ScheduleRunStatus};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::process::Command;
 
 /// Desktop notification dispatcher.

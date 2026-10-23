@@ -106,7 +106,7 @@ fn try_lock_file(file: &File) -> io::Result<bool> {
         LockFileEx, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
     };
 
-    let handle = file.as_raw_handle() as isize;
+    let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
     let mut overlapped = unsafe { std::mem::zeroed() };
     let ret = unsafe {
         LockFileEx(
@@ -135,7 +135,7 @@ fn unlock_file(file: &File) {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Storage::FileSystem::UnlockFileEx;
 
-    let handle = file.as_raw_handle() as isize;
+    let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
     let mut overlapped = unsafe { std::mem::zeroed() };
     let _ = unsafe { UnlockFileEx(handle, 0, 1, 0, &mut overlapped) };
 }

@@ -9,7 +9,7 @@ use root_core::{
 use std::{ffi::CString, mem};
 
 use super::parse::{available_memory_lower_bound, parse_swap_usage};
-use crate::traits::ResourceAccountant;
+use crate::traits::{ProcessProvider, ResourceAccountant};
 
 #[derive(Debug, Default, Clone)]
 pub struct MacAccountant;

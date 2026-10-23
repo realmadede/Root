@@ -18,30 +18,65 @@ use root_core::{
 };
 use root_guardian::GuardianPolicy;
 
+#[cfg(unix)]
+fn extract_metadata(meta: &std::fs::Metadata) -> (ResourceMetadata, u64, u64) {
+    use std::os::unix::fs::MetadataExt;
+    let file_type = if meta.is_dir() {
+        FileType::Directory
+    } else if meta.is_symlink() {
+        FileType::Symlink
+    } else {
+        FileType::RegularFile
+    };
+
+    let metadata = ResourceMetadata {
+        file_type,
+        storage: StorageMeasurement::from_raw(meta.len(), meta.blocks(), 1),
+        permissions_mode: meta.mode(),
+        mtime_epoch_secs: meta.mtime(),
+        atime_epoch_secs: meta.atime(),
+        ctime_epoch_secs: meta.ctime(),
+    };
+
+    (metadata, meta.dev(), meta.ino())
+}
+
+#[cfg(windows)]
+fn extract_metadata(meta: &std::fs::Metadata) -> (ResourceMetadata, u64, u64) {
+    let file_type = if meta.is_dir() {
+        FileType::Directory
+    } else if meta.is_symlink() {
+        FileType::Symlink
+    } else {
+        FileType::RegularFile
+    };
+
+    let epoch_secs = |t: std::io::Result<SystemTime>| {
+        t.ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0)
+    };
+
+    let metadata = ResourceMetadata {
+        file_type,
+        storage: StorageMeasurement::from_raw(meta.len(), (meta.len() + 511) / 512, 1),
+        permissions_mode: 0,
+        mtime_epoch_secs: epoch_secs(meta.modified()),
+        atime_epoch_secs: epoch_secs(meta.accessed()),
+        ctime_epoch_secs: epoch_secs(meta.created()),
+    };
+
+    (metadata, 0, 0)
+}
+
 fn collect_fixture_entries(dir: &Path, out: &mut Vec<(PathBuf, ResourceMetadata, u64, u64)>) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if let Ok(meta) = entry.metadata() {
-                use std::os::unix::fs::MetadataExt;
-                let file_type = if meta.is_dir() {
-                    FileType::Directory
-                } else if meta.is_symlink() {
-                    FileType::Symlink
-                } else {
-                    FileType::RegularFile
-                };
-
-                let metadata = ResourceMetadata {
-                    file_type,
-                    storage: StorageMeasurement::from_raw(meta.len(), meta.blocks(), 1),
-                    permissions_mode: meta.mode(),
-                    mtime_epoch_secs: meta.mtime(),
-                    atime_epoch_secs: meta.atime(),
-                    ctime_epoch_secs: meta.ctime(),
-                };
-
-                out.push((path.clone(), metadata, meta.dev(), meta.ino()));
+                let (metadata, dev, ino) = extract_metadata(&meta);
+                out.push((path.clone(), metadata, dev, ino));
 
                 if meta.is_dir() && !path.is_symlink() {
                     collect_fixture_entries(&path, out);

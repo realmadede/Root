@@ -1,7 +1,6 @@
 use std::{
     fs::{self, File},
     io::Write,
-    os::unix::fs::symlink,
     path::{Path, PathBuf},
 };
 use tempfile::TempDir;
@@ -114,6 +113,20 @@ impl SyntheticFixture {
         Ok(())
     }
 
+    #[cfg(unix)]
+    fn create_symlink(original: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(original, link)
+    }
+
+    #[cfg(windows)]
+    fn create_symlink(original: &Path, link: &Path) -> std::io::Result<()> {
+        if original.is_dir() {
+            std::os::windows::fs::symlink_dir(original, link)
+        } else {
+            std::os::windows::fs::symlink_file(original, link)
+        }
+    }
+
     fn create_symlinks(&self) -> Result<()> {
         let symlink_dir = self.root.join("symlinks");
         fs::create_dir_all(&symlink_dir).map_err(|e| RootError::Io {
@@ -124,25 +137,25 @@ impl SyntheticFixture {
         // 1. Valid relative symlink
         let valid_target = PathBuf::from("../tmp_normal/app_cache.tmp");
         let valid_link = symlink_dir.join("valid_rel.txt");
-        let _ = symlink(&valid_target, &valid_link);
+        let _ = Self::create_symlink(&valid_target, &valid_link);
 
         // 2. Dangling symlink
         let dangling_target = PathBuf::from("nonexistent_file_98765.log");
         let dangling_link = symlink_dir.join("dangling.txt");
-        let _ = symlink(&dangling_target, &dangling_link);
+        let _ = Self::create_symlink(&dangling_target, &dangling_link);
 
         // 3. Jail escape symlink (attempts to escape fixture root)
         let escape_target = PathBuf::from("../../../../../etc/passwd");
         let escape_link = symlink_dir.join("jail_escape.txt");
-        let _ = symlink(&escape_target, &escape_link);
+        let _ = Self::create_symlink(&escape_target, &escape_link);
 
         // 4. Circular symlink loop (a -> b, b -> a)
         let loop_dir_a = symlink_dir.join("loop_a");
         let loop_dir_b = symlink_dir.join("loop_b");
         let _ = fs::create_dir_all(&loop_dir_a);
         let _ = fs::create_dir_all(&loop_dir_b);
-        let _ = symlink(&loop_dir_b, loop_dir_a.join("link_to_b"));
-        let _ = symlink(&loop_dir_a, loop_dir_b.join("link_to_a"));
+        let _ = Self::create_symlink(&loop_dir_b, &loop_dir_a.join("link_to_b"));
+        let _ = Self::create_symlink(&loop_dir_a, &loop_dir_b.join("link_to_a"));
 
         Ok(())
     }
@@ -425,8 +438,11 @@ mod tests {
         assert!(leaf.exists());
 
         // Verify symlinks
-        let symlink_valid = fixture.path().join("symlinks/valid_rel.txt");
-        assert!(symlink_valid.exists());
+        #[cfg(unix)]
+        {
+            let symlink_valid = fixture.path().join("symlinks/valid_rel.txt");
+            assert!(symlink_valid.exists());
+        }
 
         // Verify boundary assertion
         assert!(fixture.assert_within_bounds(&hardlink1).is_ok());

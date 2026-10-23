@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 use root_core::model::{CapabilityStatus, ProcessState, StorageMeasurement};
 use root_platform::{
     traits::{ProcessProvider, ResourceAccountant},
