@@ -165,7 +165,10 @@ fn test_03_resource_identity_change_rejection() {
 
     // Create substitute file while original exists to guarantee a distinct inode,
     // then atomically rename over the original path.
-    let substitute = env.write_file("identity_changed_substitute.tmp", b"content v2 with new inode");
+    let substitute = env.write_file(
+        "identity_changed_substitute.tmp",
+        b"content v2 with new inode",
+    );
     fs::rename(&substitute, &file).unwrap();
 
     let request = AuthorizationRequest {
