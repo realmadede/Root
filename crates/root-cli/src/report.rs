@@ -2,7 +2,7 @@ use root_core::{
     error::{Result, RootError},
     model::{FilesystemUsage, PlatformCapabilities, PressureMetrics, SystemMemorySummary},
     DiscoveryContext, DiscoveryEngine, DiscoveryFilter, DiscoverySummary, FindingTarget,
-    ProposedAction, ProtectionTier, SafetyDecision, SyntheticFixture,
+    ProposedAction, ProtectionTier, SafetyDecision,
 };
 use root_guardian::GuardianPolicy;
 use root_platform::{
@@ -41,30 +41,22 @@ pub fn run_report(target_path: Option<PathBuf>, json_output: bool) -> Result<()>
     let memory = accountant.get_system_memory()?;
     let memory_pressure = accountant.get_pressure_metrics()?;
 
-    let (scan_roots, _synthetic_guard) = if let Some(p) = target_path {
-        (vec![p], None)
+    let home = env.home_dir();
+    let scan_roots = if let Some(p) = target_path {
+        vec![p]
     } else {
         let mut roots = Vec::new();
-        let home = env.home_dir();
         for dir in &[".gemini", ".claude", ".cache/openai"] {
             let candidate = home.join(dir);
             if candidate.exists() {
                 roots.push(candidate);
             }
         }
-        if let Ok(cwd) = std::env::current_dir() {
-            roots.push(cwd);
-        }
-        if roots.is_empty() {
-            let fixture = SyntheticFixture::create()?;
-            let path = fixture.path().to_path_buf();
-            (vec![path], Some(fixture))
-        } else {
-            (roots, None)
-        }
+        roots
     };
 
-    let fs_usage = fs.get_filesystem_usage(&scan_roots[0]).unwrap_or_default();
+    let fs_target = scan_roots.first().cloned().unwrap_or_else(|| home.clone());
+    let fs_usage = fs.get_filesystem_usage(&fs_target).unwrap_or_default();
 
     // Active processes for correlation
     let mut active_processes = Vec::new();

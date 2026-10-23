@@ -16,6 +16,23 @@ fn test_01_cli_argument_validation() {
     assert!(run_with_args(["root", "status"]).is_ok());
     assert!(run_with_args(["root", "inspect", "memory"]).is_ok());
 
+    // Scan without explicit target path must fail safely in production
+    let no_path_scan = run_with_args(["root", "scan"]);
+    assert!(no_path_scan.is_err());
+    match no_path_scan.unwrap_err() {
+        RootError::InvalidPath(msg) => {
+            assert!(msg.contains("No target path supplied"));
+        }
+        other => panic!(
+            "Expected InvalidPath for scan without path, got {:?}",
+            other
+        ),
+    }
+
+    // Scan with explicit target path succeeds
+    let temp = TempDir::new().unwrap();
+    assert!(run_with_args(["root", "scan", "--path", temp.path().to_str().unwrap()]).is_ok());
+
     // Invalid agent name must fail validation
     let bad_agent = run_with_args(["root", "discover", "--agent", "nonexistent_agent_xyz"]);
     assert!(bad_agent.is_err());

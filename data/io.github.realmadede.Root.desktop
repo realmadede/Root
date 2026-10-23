@@ -7,6 +7,6 @@ Icon=io.github.realmadede.Root
 Terminal=false
 Type=Application
 Categories=System;Monitor;
-Keywords=system;monitor;resources;agents;memory;disk;clean;
+Keywords=system;monitor;resources;agents;memory;disk;inspector;
 StartupNotify=true
 X-Purism-FormFactor=Workstation;Mobile;

@@ -1,0 +1,9 @@
+root (0.1.0-1) unstable; urgency=medium
+
+  * Initial public release of Root resource inspection application.
+  * Deterministic read-only platform inspection for agentic workflows.
+  * Native GTK4 and Libadwaita desktop graphical interface.
+  * Headless Linux CLI with doctor, status, scan, discover, and inspect.
+  * Unprivileged user-level systemd scheduling integration.
+
+ -- Raphael Madede <bagomwaraphael@gmail.com>  Fri, 23 Oct 2026 09:00:00 +0300

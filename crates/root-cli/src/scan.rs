@@ -4,7 +4,6 @@ use root_core::{
         FindingEvidence, FindingTarget, ProposedAction, ProtectionTier, ResourceCandidate,
         ResourceCategory, ResourceId, ResourceLocation, ScanFinding, ScanReport, ScanSummary,
     },
-    SyntheticFixture,
 };
 use root_guardian::GuardianPolicy;
 use root_platform::{
@@ -27,18 +26,14 @@ pub fn run_scan(
     let current_uid = env.current_uid();
     let capabilities = accountant.get_capabilities()?;
 
-    // If no path was explicitly supplied, generate and scan an isolated synthetic fixture tree
-    let (scan_root, _synthetic_guard) = if let Some(p) = target_path {
-        (p, None)
-    } else {
-        if !json_output {
-            println!("No target path supplied. Generating synthetic sandboxed fixture tree...");
-        } else {
-            eprintln!("No target path supplied. Generating synthetic sandboxed fixture tree...");
+    // Explicit target selection: reject execution if no target path was supplied
+    let scan_root = match target_path {
+        Some(p) => p,
+        None => {
+            return Err(RootError::InvalidPath(
+                "No target path supplied. Specify a directory to scan using '--path <DIRECTORY>', or use 'root discover' for automated agent footprint discovery.".into(),
+            ));
         }
-        let fixture = SyntheticFixture::create()?;
-        let path = fixture.path().to_path_buf();
-        (path, Some(fixture))
     };
 
     // Traversal options with defensive defaults (max 64 depth, 250k entries, no cross-device)

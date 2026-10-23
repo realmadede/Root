@@ -36,7 +36,7 @@ EMOJI_PATTERN = re.compile(
 # Binary or media file extensions excluded from text scanning
 MEDIA_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico",
-    ".pdf", ".bin", ".tar", ".gz", ".zip", ".qcow2"
+    ".pdf", ".bin", ".tar", ".gz", ".deb", ".zip", ".qcow2"
 }
 
 # Forbidden dependency keywords in headless core crates

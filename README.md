@@ -1,36 +1,188 @@
-# Root: Secure System Resource Management
+# Root: Secure System Resource Inspection
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform: Linux | macOS | Windows](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-red.svg)](docs/phase-10-platform-design.md)
+[![Platform: Linux (Tier 1) | macOS & Windows (Tier 3)](https://img.shields.io/badge/Platform-Linux%20(Tier%201)%20%7C%20macOS%20%26%20Windows%20(Tier%203)-red.svg)](docs/phase-12-platform-readiness.md)
 [![Rust: 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](ARCHITECTURE.md)
-[![Status: Phase 11 Complete](https://img.shields.io/badge/Status-Phase%2011%20Complete-emerald.svg)](docs/phase-11-report.md)
-[![Tests: 240 Passed](https://img.shields.io/badge/Tests-240%20Passed-brightgreen.svg)](docs/phase-11-report.md)
+[![Status: Phase 12 Release Candidate](https://img.shields.io/badge/Status-Phase%2012%20Release%20Candidate-emerald.svg)](docs/phase-12-report.md)
+[![Tests: 250 Passing](https://img.shields.io/badge/Tests-250%20Passing-brightgreen.svg)](docs/phase-12-report.md)
 
-**Root** is a deterministic, lightweight, security-first system utility engineered to help developers understand, audit, and safely inspect system resources accumulated through agentic and conversational coding workflows across Linux, macOS, and Windows.
+**Root** is a deterministic, lightweight, security-first system utility engineered to help developers understand, audit, and safely inspect system resources accumulated through agentic and conversational coding workflows.
 
-Unlike traditional sweepers, Root operates without AI runtimes or cloud telemetry, requires zero elevated privileges (`sudo` / admin), respects virtual memory dynamics, and provides a reversible, auditable quarantine model—recovering resources without guesswork.
-
----
-
-## The Problem: Resource Accumulation in Agentic Development
-
-Autonomous AI coding agents (such as Google Antigravity, Claude Code, OpenAI Codex, Gemini CLI, and Aider) and modern developer toolchains (Node.js/pnpm, Rust/Cargo, Python) introduce distinct categories of resource waste and instability:
-
-1. **Unbounded Agent Scratchpads and Worktrees**: Cloned repositories, test suites, and temporary live worktrees that balloon to hundreds of megabytes per session—often left abandoned once the conversation concludes.
-2. **Truncated Step Outputs and Diagnostic Logs**: Multi-megabyte raw stdout and stderr dumps, rotated CLI logs, and telemetry cache accumulating across sessions.
-3. **Leaked Command Environments**: Orphaned UUID directory structures and captured shell environment scripts.
-4. **Orphaned Background Daemons and Language Servers**: Abandoned development servers (Vite, Next.js) and language servers (`rust-analyzer`, `tsserver`, `pyright`) left running under PID 1 after agent or terminal crashes—silently consuming CPU cycles and gigabytes of RAM.
+Unlike traditional system cleaners, Root operates without AI runtimes or cloud telemetry, requires zero elevated privileges (`sudo` or administrative elevation), respects virtual memory dynamics, and enforces a strict read-only security boundary in production releases.
 
 ---
 
-## Core Guarantees
+## What Root Does
 
-- **Zero Elevated Privileges**: Root runs entirely in unprivileged user space. It never invokes `sudo`, requests `root`, or modifies system-wide files.
-- **Deterministic and Algorithmic**: Root uses zero AI models, cloud heuristics, or telemetry frameworks. Every decision derives from explicit, testable rules.
-- **Respect for Linux Memory Subsystems**: Root does not clear page caches (`drop_caches`) or swap. It measures process memory using Proportional Set Size (PSS) and Unique Set Size (USS)—preventing shared-memory double counting.
-- **Strict Protection of Developer Context**: Agent conversation histories (`transcript.jsonl`, `sessions/*.json`), authentication credentials (`oauth_creds.json`, `.key` files), and Git repositories with uncommitted changes are strictly protected.
-- **Quarantine-First and Reversible**: Mutations use same-filesystem atomic relocation (`SYS_renameat2` with `RENAME_NOREPLACE`) paired with a cryptographic SHA-256 rollback journal (`root inspect transactions`).
-- **Headless Core Engine Isolation**: Core engines compile and run on headless servers with zero GTK or display dependencies. The desktop GUI is strictly an optional visualization layer.
+Autonomous AI coding agents (such as Google Antigravity, Claude Code, OpenAI Codex, Gemini CLI, and Aider) and modern developer toolchains (Node.js/npm, pnpm, Rust/Cargo, Python) generate significant ephemeral storage and background processes:
+
+1. **Agent Scratchpads and Worktrees**: Cloned repositories, test sandboxes, and transient worktrees that accumulate across iterative coding sessions.
+2. **Diagnostic Logs and Traces**: Multi-megabyte raw execution outputs, rotated CLI logs, and telemetry caches.
+3. **Leaked Shell Environments**: Orphaned UUID directory structures and captured environment wrappers.
+4. **Orphaned Background Daemons**: Abandoned development servers (Vite, Next.js) and language servers (`rust-analyzer`, `tsserver`, `pyright`) left running under init after terminal closures.
+
+Root identifies, classifies, and audits these resources deterministically—providing developers and system administrators with complete visibility into agentic footprints.
+
+---
+
+## Local-First and Offline Guarantees
+
+- **100% Offline**: Root never communicates over external networks. There are zero remote API calls, zero cloud telemetry pipelines, and zero analytics pings.
+- **Deterministic and Algorithmic**: Resource classification derives entirely from explicit, audited rules. Root uses zero heuristic AI models or non-deterministic scoring.
+- **Privacy-Preserving Metadata Inspection**: Root inspects filesystem metadata (paths, sizes, timestamps, inodes, permissions) only. It never reads, logs, or indexes private user documents, conversation histories (`transcript.jsonl`), authentication tokens, or credential files.
+- **Zero Elevated Privileges**: Root executes entirely in unprivileged user space. It never requests `sudo`, never runs `setuid`, and never writes to system-wide directories.
+
+---
+
+## Platform Support Strategy
+
+Root categorizes platform support into three operational tiers:
+
+| Tier | Platforms | Packaging & Delivery | Interface Support | Validation Status |
+|---|---|---|---|---|
+| **Tier 1: Validated Release** | Linux (x86_64)<br>Debian, Kali, Ubuntu, Fedora, Arch | Debian package (`.deb`), portable archive (`.tar.gz`), source | Headless CLI (`root`) and native desktop GUI (`root-gui`) | **Verified**: Tested on Kali Linux with GNOME 47 / Wayland |
+| **Tier 2: Experimental Package** | None in v1.0 | None | None | N/A |
+| **Tier 3: Source Support Only** | macOS (Darwin x86_64 / arm64)<br>Windows 11 (x86_64) | Build from source via Cargo | Headless CLI (`root`) platform adapters | **Verified in CI**: Platform adapters compile and pass unit tests |
+
+For full platform matrix and capability breakdown, see [docs/phase-12-platform-readiness.md](docs/phase-12-platform-readiness.md).
+
+---
+
+## Installation Methods
+
+### Method 1: Debian / Ubuntu / Kali Linux (`.deb` Package)
+
+The Debian package installs both the headless CLI (`/usr/bin/root`) and native desktop GUI (`/usr/bin/root-gui`), along with desktop launchers, scalable icons, and manual pages.
+
+```bash
+# Verify cryptographic checksum
+sha256sum -c SHA256SUMS
+
+# Install via apt or dpkg
+sudo apt install ./dist/root_0.1.0-1_amd64.deb
+# or
+sudo dpkg -i dist/root_0.1.0-1_amd64.deb
+```
+
+### Method 2: Portable Standalone Tarball (Unprivileged)
+
+The portable distribution requires zero elevated privileges and can be installed into any custom directory (default: `~/.local`):
+
+```bash
+# Unpack the archive
+tar -xzf dist/root-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
+cd root-v0.1.0-x86_64-unknown-linux-gnu
+
+# Install to ~/.local
+./install.sh --prefix ~/.local
+
+# Optional: Verify installation
+~/.local/bin/root doctor
+```
+
+To remove:
+```bash
+./uninstall.sh --prefix ~/.local
+```
+
+### Method 3: Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/realmadede/Root.git
+cd Root
+
+# Build optimized production release binaries
+cargo build --release
+
+# Headless CLI only (zero GTK dependencies, suitable for servers/containers)
+cargo build --release -p root-cli
+```
+
+For complete installation details and troubleshooting, see [docs/installation.md](docs/installation.md) and [docs/uninstallation.md](docs/uninstallation.md).
+
+---
+
+## Basic Usage
+
+### Command Line Interface (`root`)
+
+Root provides a comprehensive headless CLI supporting plain text tables, JSON formatting (`--json`), and adherence to the `NO_COLOR` standard.
+
+```bash
+# Check host system health, memory pressure, and safety boundaries
+root status
+
+# Audit platform interfaces, kernel capabilities, and scheduler status
+root doctor
+
+# Deterministically scan an explicit workspace directory
+root scan --path /path/to/project
+
+# Discover AI coding agent and development tool artifacts across user directories
+root discover --agents --tools
+
+# Launch interactive terminal discovery browser
+root discover --interactive
+
+# Inspect filesystem allocations and physical storage geometry
+root inspect storage
+
+# Inspect kernel memory distribution (PSS/USS, swap, PSI pressure stalls)
+root inspect memory
+
+# Inspect active processes with credential sanitization
+root inspect processes --user-only
+
+# Check status of opt-in scheduled inspection service
+root schedule status
+
+# Launch live event monitoring terminal dashboard
+root monitor
+```
+
+For detailed command options and examples, see [docs/cli-reference.md](docs/cli-reference.md).
+
+### Native Desktop Application (`root-gui`)
+
+Root includes a native GNOME desktop application built with GTK4 and Libadwaita adhering to the [Designing-Skills](https://github.com/realmadede/Designing-Skills.git) reference foundation.
+
+```bash
+# Launch the desktop graphical interface
+root-gui
+```
+
+The desktop interface provides seven dedicated navigation views:
+- **Overview**: System memory metrics, swap utilization, PSI pressure stalls, storage gauges, and operational status.
+- **Resources**: Bounded resource explorer with explicit folder selection, multi-criteria filtering, and Guardian safety badges.
+- **Agents**: Inventory and footprint breakdown across 12 AI coding agents and development toolchains.
+- **Processes**: Real-time `/proc` process inspection with attribution confidence and credential redaction.
+- **Activity**: Live monitoring dashboard displaying circular event queues and system alerts.
+- **Schedule**: User-controlled scheduled inspection interface managing `systemd --user` timers.
+- **Settings**: System appearance configuration (light/dark mode), resource budget thresholds, and security policy guarantees.
+
+---
+
+## Security Model and Production Invariants
+
+Root v1.0 enforces an uncompromising security architecture:
+
+1. **Strict Read-Only Production Boundary**: Production releases contain zero filesystem deletion, zero production quarantine, and zero process termination capabilities. All production commands are strictly read-only inspection and monitoring routines.
+2. **Guardian Authorization Architecture**: Root's internal Guardian engine (`root-guardian`) enforces an 11-stage authorization pipeline, parent directory pinning, and cryptographic transaction logging. Mutation routines are isolated to synthetic test fixtures and permanently disabled in production builds.
+3. **Safe Target Selection**: Root requires explicit target selection for scans (`root scan --path <DIR>` or native file chooser in GUI). It never defaults silently to the current working directory or creates synthetic fixtures during production scans.
+4. **Unprivileged Scheduling**: Background scheduling operates strictly as an opt-in `systemd --user` service. It runs under the unprivileged user account and never executes without explicit operator configuration.
+5. **Dynamic Link Isolation**: The headless CLI executable (`root`) links exclusively to standard system libraries (`libc`), ensuring zero display server or GTK runtime dependencies on servers or containers.
+
+For comprehensive security analysis, see [SECURITY.md](SECURITY.md), [docs/threat-model.md](docs/threat-model.md), and [docs/phase-12-security-review.md](docs/phase-12-security-review.md).
+
+---
+
+## Current Limitations
+
+- **Read-Only Invariant**: Production cleanup, automated pruning, and process termination are disabled in v1.0. Root audits and reports resources; it does not delete them.
+- **Desktop Display Requirements**: The desktop GUI (`root-gui`) requires a functional Wayland or X11 display server with GTK 4.12+ and Libadwaita 1.4+. On headless environments, use the standalone `root` CLI.
+- **macOS and Windows Binaries**: Native packages (`.pkg`, `.msi`) and native desktop GUIs for macOS and Windows are deferred to future releases. macOS and Windows are supported via source builds of headless platform adapters.
+- **Filesystem Traversal Bounds**: Traversal is defensively bounded to 250,000 entries and a maximum recursion depth of 64 levels to prevent memory exhaustion on massive filesystems.
 
 ---
 
@@ -41,12 +193,12 @@ Root is architected as a modular Cargo workspace cleanly separating domain polic
 ```mermaid
 flowchart TD
     subgraph UserInterfaces["User Interfaces"]
-        GUI["root-gui<br>(GTK4 + libadwaita)"]
+        GUI["root-gui<br>(GTK4 + Libadwaita)"]
         CLI["root-cli<br>(Terminal Application)"]
     end
 
     subgraph SecurityAndPolicy["Security & Governance"]
-        Guardian["root-guardian<br>(Authorization, Relocation, SHA-256 Journals)"]
+        Guardian["root-guardian<br>(Authorization, Verification, Synthetic Fixtures)"]
     end
 
     subgraph CoreEngine["Core Engine & Platform"]
@@ -69,183 +221,78 @@ flowchart TD
 
 | Crate | Responsibility | Dependencies |
 |---|---|---|
-| [**`root-core`**](crates/root-core) | Domain models (`ResourceCandidate`, `ClassificationTier`), catalog of 12 discovery rules, multi-factor lifecycle engine, and Level 1 synthetic test fixtures. | Minimal (pure Rust, `serde`) |
-| [**`root-platform`**](crates/root-platform) | Platform abstraction layer: Linux `/proc`, `statvfs`, PSI, `systemd --user` timers, and `inotify`; macOS `libproc`, `sysctl`, and `launchd` LaunchAgents; Windows Toolhelp32, Task Scheduler XML, and `FILE_FLAG_OPEN_REPARSE_POINT`; defensive bounded traversal engine; and portable advisory locking. | `libc`, POSIX syscalls, `windows-sys` (Windows) |
-| [**`root-guardian`**](crates/root-guardian) | Security enforcement: 11-stage authorization pipeline, 8-factor authorization engine, 8-state transaction state machine, parent directory pinning, streaming SHA-256 integrity verification, atomic same-filesystem relocation (`RENAME_NOREPLACE`), durable recovery journal, and 32 adversarial test scenarios. | `root-core`, `root-platform` |
-| [**`root-cli`**](crates/root-cli) | Terminal application providing status overview, capability diagnostics (`doctor`), resource inspection, interactive discovery browsing, schedule configuration, and live monitoring output. | `root-core`, `root-platform`, `root-guardian`, `clap` |
-| [**`root-gui`**](crates/root-gui) | Native desktop application built with GTK4 and libadwaita adhering to Designing-Skills reference design. Features 7 dedicated navigation views and headless compilation support. | Optional `gtk4`, `libadwaita` |
+| [**`root-core`**](crates/root-core) | Domain models (`ResourceCandidate`, `ClassificationTier`), catalog of 12 discovery rules, multi-factor lifecycle engine, and synthetic test fixtures. | Minimal (pure Rust, `serde`) |
+| [**`root-platform`**](crates/root-platform) | Platform abstraction layer: Linux `/proc`, `statvfs`, PSI, `systemd --user` timers, and `inotify`; macOS `libproc`, `sysctl`, and `launchd`; Windows Toolhelp32, Task Scheduler XML, and reparse points; bounded traversal engine. | `libc`, POSIX syscalls, `windows-sys` (Windows) |
+| [**`root-guardian`**](crates/root-guardian) | Security enforcement: 11-stage authorization pipeline, parent directory pinning, streaming SHA-256 integrity verification, recovery journal, and 32 adversarial test scenarios. | `root-core`, `root-platform` |
+| [**`root-cli`**](crates/root-cli) | Terminal application providing status overview, capability diagnostics (`doctor`), resource inspection, discovery browsing, schedule configuration, and live monitoring. | `root-core`, `root-platform`, `root-guardian`, `clap` |
+| [**`root-gui`**](crates/root-gui) | Native desktop application built with GTK4 and Libadwaita adhering to Designing-Skills reference design. Features 7 dedicated navigation views and headless compilation support. | Optional `gtk4`, `libadwaita` |
 
 ---
 
-## Hybrid Operating Architecture
+## Automated Verification and Quality Gates
 
-Root supports three operating modes powered by a single shared analysis and policy engine—ensuring identical safety rules apply across all execution paths:
-
-```mermaid
-graph LR
-    ModeA["Mode A: On-Demand<br>(Primary CLI / GUI)"] --- CoreEngine["Root Core Engine<br>(root-core + root-guardian)"]
-    ModeB["Mode B: Scheduled<br>(systemd user timers)"] --- CoreEngine
-    ModeC["Mode C: Live Monitoring<br>(inotify + cgroups v2 PSI)"] --- CoreEngine
-```
-
-1. **Mode A (On-Demand)**: Manual user-initiated inspection and discovery via terminal CLI (`root-cli`) or native desktop application (`root-gui`)—with zero background resource overhead.
-2. **Mode B (Scheduled)**: Periodic passive background inspection managed via native `systemd --user` timers. Dispatches non-intrusive desktop notifications via D-Bus when resource thresholds are exceeded, utilizing POSIX `flock` to prevent overlapping runs. Strictly read-only; never deletes automatically.
-3. **Mode C (Live Monitoring)**: Event-driven watcher leveraging Linux `inotify` and cgroups v2 Pressure Stall Information (PSI). Features 150ms write coalescing to mitigate event storms and robust PID reuse tracking via process start ticks.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- **Operating System**: Linux with kernel 5.8+ (Kali Linux, Debian, Ubuntu, Fedora, Arch).
-- **Rust Toolchain**: Rust 1.85+ (`stable`).
-- **Optional Desktop GUI Dependencies**: `libgtk-4-dev`, `libadwaita-1-dev`, `pkg-config`.
-
-### Building from Source
+Root maintains a comprehensive automated test suite and invariant enforcement pipeline:
 
 ```bash
-# Clone the repository
-git clone https://github.com/realmadede/Root.git
-cd Root
-
-# Build all workspace crates (including native GTK4 GUI)
-cargo build --workspace
-
-# Build headless CLI only (zero GTK dependencies, suitable for servers/CI)
-cargo build -p root-cli
-```
-
-### Running Automated Tests
-
-Root maintains a comprehensive automated test suite across synthetic sandboxes, simulated adversarial filesystems, and view models:
-
-```bash
-# Run all 159 workspace tests
-cargo test --workspace
+# Run all 250 workspace tests
+cargo test --workspace --all-targets
 
 # Run headless tests without display server dependencies
 cargo test -p root-gui --no-default-features
+
+# Verify repository continuous assurance invariants
+python3 .github/scripts/check_invariants.py
 ```
+
+All 250 tests and all 11 continuous assurance invariants pass cleanly.
 
 ---
 
-## Command Line Usage
+## Reporting Bugs and Vulnerabilities
 
-Root provides a comprehensive CLI suite (`root-cli`) with rich tabular formatting, middle truncation for deep paths, and full adherence to the `NO_COLOR` standard.
-
-```bash
-# Check host system health, memory pressure, and safety policy
-cargo run -p root-cli -- status
-
-# Audit host platform capabilities, kernel interfaces, and systemd user services
-cargo run -p root-cli -- doctor
-
-# Inspect filesystem capacity and physical storage allocations
-cargo run -p root-cli -- inspect storage
-
-# Inspect kernel memory distribution (RAM, swap, reclaimable cache, PSI pressure)
-cargo run -p root-cli -- inspect memory
-
-# Inspect active processes with privacy-preserving command-line sanitization
-cargo run -p root-cli -- inspect processes --user-only
-
-# Discover AI coding agent and development tool artifacts
-cargo run -p root-cli -- discover --agents --tools
-
-# Launch interactive terminal discovery browser
-cargo run -p root-cli -- discover --interactive
-
-# Explain classification rules and Guardian safety evaluation for a resource
-cargo run -p root-cli -- explain antigravity-scratch
-
-# Audit Mode B scheduled inspection status
-cargo run -p root-cli -- schedule status
-
-# Launch Mode C live event monitoring dashboard
-cargo run -p root-cli -- monitor
-```
+- **Security Vulnerabilities**: For vulnerabilities or security concerns, review [SECURITY.md](SECURITY.md) and report directly to the security contact. Do not open public issues for undisclosed security flaws.
+- **Functional Bugs and Feature Requests**: Report general bugs, regressions, or documentation errors via GitHub Issues at [https://github.com/realmadede/Root/issues](https://github.com/realmadede/Root/issues). Please include platform details (`root doctor` output) and reproduction steps.
 
 ---
 
-## Native Desktop Application
+## Documentation Index
 
-Root includes a native GNOME desktop application (`root-gui`) built directly with GTK4 and libadwaita, adhering to the [Designing-Skills](https://github.com/realmadede/Designing-Skills.git) reference design.
-
-```bash
-# Launch the desktop graphical interface
-cargo run -p root-gui
-```
-
-The desktop application provides seven dedicated views:
-- **Overview**: System memory metrics, swap utilization, PSI pressure stalls, storage gauges, and operating mode statuses.
-- **Resources**: Bounded resource explorer (capped at 500 rows) with multi-criteria filtering, middle path truncation, and Guardian decision badges.
-- **Agents**: Footprint inventory and classification cards across 12 AI coding agents and development toolchains.
-- **Processes**: Real-time `/proc` process inspection with attribution confidence and credential redaction.
-- **Activity**: Mode C live monitoring dashboard displaying circular event queues and degraded state banners.
-- **Schedule**: Mode B scheduled inspection interface displaying systemd user timer status, execution budgets, and historical run logs.
-- **Settings**: System appearance configuration (`AdwStyleManager` light/dark theme switching), safety policy guarantees, and resource budget thresholds.
-
----
-
-## Repository Documentation Index
-
-### Core Specifications
+### Core Specifications & Policies
 | Document | Purpose |
 |---|---|
 | [**ARCHITECTURE.md**](ARCHITECTURE.md) | High-level system architecture, crate boundaries, and transactional lifecycle. |
 | [**SECURITY.md**](SECURITY.md) | Security policy, least-privilege guarantees, and vulnerability reporting. |
 | [**REQUIREMENTS.md**](REQUIREMENTS.md) | Functional, non-functional, and platform requirements. |
 | [**CONTRIBUTING.md**](CONTRIBUTING.md) | Contribution workflow, code standards, and setup instructions. |
-
-### Policies & Platform Architecture
-| Document | Purpose |
-|---|---|
 | [**docs/threat-model.md**](docs/threat-model.md) | Deep threat model (path traversal, TOCTOU, symlinks, PID reuse, mount escapes). |
-| [**docs/cleanup-policy.md**](docs/cleanup-policy.md) | 4-tier classification policy, Git safety invariants, and quarantine semantics. |
-| [**docs/platform-abstraction.md**](docs/platform-abstraction.md) | Cross-platform traits (`ProcessProvider`, `ResourceAccountant`, `FilesystemWatcher`). |
-| [**docs/testing-strategy.md**](docs/testing-strategy.md) | 3-level sandboxed testing strategy (Synthetic Fixtures, Containers, Disposable VMs). |
-| [**docs/hybrid-architecture.md**](docs/hybrid-architecture.md) | Detailed architecture of On-Demand, Scheduled, and Live Monitoring modes. |
-| [**docs/cli-reference.md**](docs/cli-reference.md) | Comprehensive command-line interface manual and terminal architecture. |
-| [**docs/schedule-architecture.md**](docs/schedule-architecture.md) | Architecture specification for Mode B scheduled inspections and systemd user timers. |
-| [**docs/monitor-architecture.md**](docs/monitor-architecture.md) | Architecture specification for Mode C live event monitoring and inotify pipelines. |
-| [**docs/gui-architecture.md**](docs/gui-architecture.md) | Native desktop application architecture (GTK4 + libadwaita). |
-| [**docs/design-foundation.md**](docs/design-foundation.md) | Native GNOME GUI design foundation adapted from Designing-Skills (commit `2d22863`). |
+| [**docs/cleanup-policy.md**](docs/cleanup-policy.md) | Classification policy, Git safety invariants, and quarantine semantics. |
 
-### Implementation Roadmap & Milestone Reports
+### Packaging & Release Documentation
 | Document | Purpose |
 |---|---|
-| [**docs/roadmap.md**](docs/roadmap.md) | Phased implementation plan from Phase 00 through 1.0 release. |
-| [**docs/phase-00-report.md**](docs/phase-00-report.md) | Phase 00 Completion Report: Research, Foundation, Architecture & Threat Model. |
-| [**docs/phase-01-report.md**](docs/phase-01-report.md) | Phase 01 Completion Report: Domain Models, Platform Traits & Synthetic Fixtures. |
-| [**docs/phase-02-report.md**](docs/phase-02-report.md) | Phase 02 Completion Report: Linux Platform Engine (/proc, statvfs, PSS/USS). |
-| [**docs/phase-03-report.md**](docs/phase-03-report.md) | Phase 03 Completion Report: Agent & Development Tool Discovery Engine. |
-| [**docs/phase-04-report.md**](docs/phase-04-report.md) | Phase 04 Completion Report: Guardian Security Engine & Quarantine Rollback. |
-| [**docs/phase-05-report.md**](docs/phase-05-report.md) | Phase 05 Completion Report: Command Line Interface & Inspection Experience. |
-| [**docs/phase-06-report.md**](docs/phase-06-report.md) | Phase 06 Completion Report: Scheduled Inspections & systemd User Units (Mode B). |
-| [**docs/phase-07-report.md**](docs/phase-07-report.md) | Phase 07 Completion Report: Live Event Monitoring Engine (Mode C). |
-| [**docs/phase-08-report.md**](docs/phase-08-report.md) | Phase 08 Completion Report: Native Desktop Application Architecture (GTK4/libadwaita). |
-| [**docs/phase-09-report.md**](docs/phase-09-report.md) | Phase 09 Completion Report: Desktop Usability & Integration Validation. |
+| [**docs/installation.md**](docs/installation.md) | Complete installation instructions for Debian `.deb`, tarball, and source. |
+| [**docs/uninstallation.md**](docs/uninstallation.md) | Clean removal instructions for all package and user formats. |
+| [**docs/release-process.md**](docs/release-process.md) | Repeatable release workflow, quality gates, and checksum verification. |
+| [**docs/phase-12-release-plan.md**](docs/phase-12-release-plan.md) | Phase 12 release strategy, packaging architecture, and deployment gates. |
+| [**docs/phase-12-platform-readiness.md**](docs/phase-12-platform-readiness.md) | Multi-platform support matrix and validation evidence. |
+| [**docs/phase-12-security-review.md**](docs/phase-12-security-review.md) | Pre-release security review and invariant verification. |
+| [**docs/phase-12-validation-report.md**](docs/phase-12-validation-report.md) | Comprehensive test suite and packaging validation evidence. |
+| [**docs/phase-12-report.md**](docs/phase-12-report.md) | Phase 12 final completion report and release readiness decision. |
 
-### Research Library
-- [Linux Resource Management Research](docs/research/linux-resource-management.md)
-- [AI Coding Agent Storage Behavior](docs/research/agent-storage-behavior.md)
-- [Deep Dive: Google Antigravity](docs/research/antigravity.md)
-- [Deep Dive: Claude Code](docs/research/claude-code.md)
-- [Deep Dive: OpenAI Codex & Priority 2 Agents](docs/research/codex.md)
-- [Deep Dive: Development Tooling Artifacts](docs/research/development-artifacts.md)
-
----
-
-## Current Status: Phase 09 Complete
-
-Root has completed **Phase 09: Native Desktop Integration, Usability and Security Validation**.
-
-All core platform engines, discovery rules, security authorization layers, scheduled background timers, live event monitoring watchers, and native GTK4/libadwaita graphical views are fully implemented, verified, and backed by 159 passing automated tests.
-
-The project is currently positioned at the Phase 09 review gate, with no later phase started. Next, pending human authorization: **Phase 10: Cross-Platform Expansion (macOS & Windows)**, **Phase 11: Controlled Mutation Enablement**, and **Phase 12: 1.0 Production Hardening, Packaging & SHA-256 Distribution**. The Guardian quarantine engine is implemented and tested, but all user-facing commands remain read-only until Phase 11.
-
-Under Phase 12, users will no longer need to clone the repository or maintain a local Rust toolchain; pre-compiled standalone release binaries will be published directly to GitHub Releases alongside official `SHA256SUMS` manifests and cryptographic signatures for deterministic integrity verification. An official project landing website and documentation portal will accompany the release—providing interactive terminal demonstrations, architecture guides, and direct download links.
+### Milestone Completion Reports
+- [Phase 00 Completion Report](docs/phase-00-report.md): Foundation, Research, Architecture & Threat Model
+- [Phase 01 Completion Report](docs/phase-01-report.md): Core Models, Platform Traits & Synthetic Fixtures
+- [Phase 02 Completion Report](docs/phase-02-report.md): Linux Platform Engine (/proc, statvfs, PSS/USS)
+- [Phase 03 Completion Report](docs/phase-03-report.md): Agent & Development Tool Discovery Engine
+- [Phase 04 Completion Report](docs/phase-04-report.md): Guardian Security Engine & Quarantine Rollback
+- [Phase 05 Completion Report](docs/phase-05-report.md): Command Line Interface & Inspection Experience
+- [Phase 06 Completion Report](docs/phase-06-report.md): Scheduled Inspections & systemd User Units (Mode B)
+- [Phase 07 Completion Report](docs/phase-07-report.md): Live Event Monitoring Engine (Mode C)
+- [Phase 08 Completion Report](docs/phase-08-report.md): Native Desktop Application Architecture (GTK4/Libadwaita)
+- [Phase 09 Completion Report](docs/phase-09-report.md): Desktop Usability & Integration Validation
+- [Phase 10 Completion Report](docs/phase-10-report.md): Cross-Platform Expansion (macOS & Windows)
+- [Phase 11 Completion Report](docs/phase-11-report.md): Production Mutation Security Architecture & Adversarial Validation
+- [Phase 12 Completion Report](docs/phase-12-report.md): Production Hardening, Packaging, and Distribution
 
 ---
 

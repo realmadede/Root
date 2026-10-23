@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#24292e"/>
+      <stop offset="100%" stop-color="#181a1f"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3584e4"/>
+      <stop offset="100%" stop-color="#1c71d8"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2ec27e"/>
+      <stop offset="100%" stop-color="#26a269"/>
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Base Squircle -->
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#bgGrad)" filter="url(#dropShadow)"/>
+
+  <!-- Inner Subtle Border -->
+  <rect x="8.5" y="8.5" width="111" height="111" rx="27.5" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1"/>
+
+  <!-- Top System Anchor Node -->
+  <circle cx="64" cy="34" r="8" fill="url(#accentGrad)"/>
+  <circle cx="64" cy="34" r="4" fill="#ffffff"/>
+
+  <!-- Diverging Inspection Graph Paths (Connecting Stem & Branches) -->
+  <path d="M64 42 L64 62" stroke="#3584e4" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M64 62 L38 80" stroke="#3584e4" stroke-width="3" stroke-linecap="round"/>
+  <path d="M64 62 L90 80" stroke="#3584e4" stroke-width="3" stroke-linecap="round"/>
+  <path d="M64 62 L64 92" stroke="url(#shieldGrad)" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Branch Nodes -->
+  <circle cx="38" cy="80" r="6" fill="#3584e4"/>
+  <circle cx="38" cy="80" r="2.5" fill="#ffffff"/>
+
+  <circle cx="90" cy="80" r="6" fill="#3584e4"/>
+  <circle cx="90" cy="80" r="2.5" fill="#ffffff"/>
+
+  <!-- Root Central Protective Emblem (Guardian Node) -->
+  <path d="M64 74 L78 81 L78 95 C78 103 64 108 64 108 C64 108 50 103 50 95 L50 81 Z" fill="url(#shieldGrad)" filter="url(#dropShadow)"/>
+  <path d="M64 79 L73 84 L73 93 C73 98 64 102 64 102 C64 102 55 98 55 93 L55 84 Z" fill="#ffffff" fill-opacity="0.25"/>
+
+  <!-- Radar Arc (Telemetry Observation) -->
+  <path d="M46 34 A18 18 0 0 1 82 34" fill="none" stroke="#3584e4" stroke-width="2" stroke-opacity="0.6" stroke-linecap="round" stroke-dasharray="2 3"/>
+  <path d="M38 34 A26 26 0 0 1 90 34" fill="none" stroke="#3584e4" stroke-width="2" stroke-opacity="0.3" stroke-linecap="round" stroke-dasharray="2 4"/>
+</svg>

@@ -1,0 +1,49 @@
+.TH ROOT 1 "October 2026" "Root 0.1.0" "User Commands"
+.SH NAME
+root \- deterministic, local-first resource inspection utility for agentic workflows
+.SH SYNOPSIS
+.B root
+[\fIOPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR...]
+.SH DESCRIPTION
+.B Root
+is a deterministic, local-first system resource inspection and monitoring utility designed to help developers audit, track, and safely observe resources accumulated through agentic coding workflows.
+.PP
+Root operates under strict least-privilege principles, requiring zero elevated privileges and executing no mutating or destructive filesystem actions in production.
+.SH COMMANDS
+.TP
+\fBdoctor\fR
+Probe system capabilities, kernel interfaces, memory distribution, and XDG paths.
+.TP
+\fBstatus\fR [\fB\-\-json\fR]
+Display a concise overview of system telemetry, memory pressure, and activity.
+.TP
+\fBscan\fR \fB\-\-path\fR \fIPATH\fR [\fB\-\-json\fR] [\fB\-\-interactive\fR]
+Scan and audit development resources within the specified target directory.
+.TP
+\fBdiscover\fR [\fB\-\-path\fR \fIPATH\fR] [\fB\-\-agents\fR] [\fB\-\-tools\fR] [\fB\-\-agent\fR \fINAME\fR] [\fB\-\-tool\fR \fINAME\fR] [\fB\-\-json\fR]
+Discover and classify footprints from AI coding agents and development tooling.
+.TP
+\fBinspect\fR \fImemory\fR|\fIprocesses\fR|\fIstorage\fR|\fItransactions\fR
+Deep-dive into specific subsystem telemetry and accounting.
+.TP
+\fBexplain\fR \fIRESOURCE_ID\fR [\fB\-\-json\fR]
+Explain provenance, matched classification rules, and Guardian policy for a resource.
+.TP
+\fBreport\fR [\fB\-\-path\fR \fIPATH\fR] [\fB\-\-json\fR]
+Generate comprehensive diagnostic audit report.
+.TP
+\fBmonitor\fR [\fB\-\-path\fR \fIPATH\fR] [\fB\-\-processes\fR] [\fB\-\-budget-entries\fR \fIN\fR]
+Start live, rate-limited, read-only filesystem and process observation.
+.TP
+\fBschedule\fR \fIstatus\fR|\fIenable\fR|\fIdisable\fR|\fIhistory\fR
+Manage unprivileged user-level scheduled inspection timers.
+.SH SAFETY INVARIANTS
+Root v1.0 operates exclusively in Read-Only Safety Mode. All destructive commands (clean, delete, quarantine, restore, prune) are permanently rejected by the Guardian security engine in production.
+.SH ENVIRONMENT
+.TP
+.B NO_COLOR
+When set, disables terminal color formatting.
+.SH AUTHORS
+Raphael Madede <bagomwaraphael@gmail.com> and Root Contributors.
+.SH SEE ALSO
+.BR root-gui (1)

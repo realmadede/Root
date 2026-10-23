@@ -1,0 +1,125 @@
+name: Release Preparation & Packaging
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_draft:
+        description: 'Create GitHub Release Draft'
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  quality-gate:
+    name: Release Quality Gate & Invariant Checks
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify repository invariants
+        run: python3 .github/scripts/check_invariants.py
+
+      - name: Install GTK4 and libadwaita dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libgtk-4-dev libadwaita-1-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify code formatting
+        run: cargo fmt --check
+
+      - name: Run clippy checks
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run workspace tests
+        run: cargo test --workspace --all-targets
+
+      - name: Build documentation
+        run: cargo doc --workspace --no-deps
+
+  package-linux:
+    name: Linux Distribution Packaging (Debian & Tarball)
+    needs: quality-gate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install GTK4 and libadwaita dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libgtk-4-dev libadwaita-1-dev dpkg-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binaries
+        run: |
+          cargo build --release -p root-cli
+          cargo build --release -p root-gui --features gtk
+
+      - name: Build Debian package
+        run: ./scripts/package-deb.sh
+
+      - name: Build portable Linux tarball
+        run: ./scripts/package-tarball.sh
+
+      - name: Generate SHA-256 Checksums
+        run: ./scripts/generate-checksums.sh
+
+      - name: Upload Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-linux-artifacts
+          path: |
+            dist/*.deb
+            dist/*.tar.gz
+            dist/SHA256SUMS
+
+      - name: Create Release Draft (Explicit Authorization Only)
+        if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_draft == true)
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: false
+          files: |
+            dist/*.deb
+            dist/*.tar.gz
+            dist/SHA256SUMS
+          body: |
+            # Root v0.1.0 — Deterministic Resource Inspection Utility
+
+            Root is a deterministic, local-first system resource inspection utility engineered to help developers understand, audit, and safely inspect system resources accumulated through AI coding workflows.
+
+            ### Verified Security Invariants:
+            - Production Read-Only Safety Mode (All mutations permanently rejected in production)
+            - Unprivileged execution (zero root/sudo/privileged daemon requirements)
+            - 100% deterministic local observation (zero AI runtimes, telemetry, or cloud calls)

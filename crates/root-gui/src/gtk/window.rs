@@ -174,19 +174,30 @@ pub fn build_and_present_window(app: &adw::Application) {
         let ctrl_clone = controller.clone();
         let toast_overlay_clone = toast_overlay.clone();
 
+        let window_clone = window.clone();
         scan_btn.connect_clicked(move |_| {
-            let mut ctrl = ctrl_clone.borrow_mut();
-            let test_fixture = std::env::temp_dir().join("root-test-fixture");
-            let target = if test_fixture.exists() {
-                test_fixture
-            } else if let Ok(cwd) = std::env::current_dir() {
-                cwd
-            } else {
-                std::env::temp_dir()
-            };
-            ctrl.start_scan(target);
-            toast_overlay_clone
-                .add_toast(adw::Toast::new("Resource discovery started in background"));
+            let chooser = gtk4::FileChooserNative::new(
+                Some("Select Directory to Inspect"),
+                Some(&window_clone),
+                gtk4::FileChooserAction::SelectFolder,
+                Some("Inspect"),
+                Some("Cancel"),
+            );
+            let ctrl_inner = ctrl_clone.clone();
+            let toast_inner = toast_overlay_clone.clone();
+            chooser.connect_response(move |dialog, response| {
+                if response == gtk4::ResponseType::Accept {
+                    if let Some(file) = dialog.file() {
+                        if let Some(path) = file.path() {
+                            let mut ctrl = ctrl_inner.borrow_mut();
+                            ctrl.start_scan(path.clone());
+                            let msg = format!("Resource discovery started for {}", path.display());
+                            toast_inner.add_toast(adw::Toast::new(&msg));
+                        }
+                    }
+                }
+            });
+            chooser.show();
         });
     }
     header_bar.pack_end(&scan_btn);

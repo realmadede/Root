@@ -2,7 +2,7 @@ use root_core::{
     error::{Result, RootError},
     model::{FindingTarget, ProposedAction, ProtectionTier, SafetyDecision},
     DiscoveryContext, DiscoveryEngine, DiscoveryFilter, DiscoveryReport, DiscoveryTargetId,
-    SyntheticFixture, TargetKind,
+    TargetKind,
 };
 use root_guardian::GuardianPolicy;
 use root_platform::{
@@ -74,14 +74,14 @@ pub fn run_discover(
         filter.kind = Some(TargetKind::Tool);
     }
 
-    // 2. Resolve scan roots (Allowlisted targets)
-    let (scan_roots, _synthetic_guard) = if let Some(p) = target_path {
-        (vec![p], None)
+    // 2. Resolve scan roots (Explicit target or known agent locations)
+    let scan_roots = if let Some(p) = target_path {
+        vec![p]
     } else {
         let mut roots = Vec::new();
         let home = env.home_dir();
 
-        // Check allowlisted agent locations
+        // Check allowlisted agent locations in user home
         let gemini_dir = home.join(".gemini");
         if gemini_dir.exists() {
             roots.push(gemini_dir);
@@ -97,28 +97,17 @@ pub fn run_discover(
             roots.push(codex_cache);
         }
 
-        // Current workspace directory
-        if let Ok(cwd) = std::env::current_dir() {
-            roots.push(cwd);
-        }
-
-        // If no candidate directories exist, fall back to sandboxed synthetic fixture
         if roots.is_empty() {
             if !json_output {
                 println!(
-                    "No installed agent directories detected. Using synthetic sandboxed fixture..."
+                    "No installed agent directories detected in user home (~/.gemini, ~/.claude, ~/.cache/openai)."
                 );
-            } else {
-                eprintln!(
-                    "No installed agent directories detected. Using synthetic sandboxed fixture..."
-                );
+                println!("Specify a target workspace directory using '--path <DIRECTORY>'.");
             }
-            let fixture = SyntheticFixture::create()?;
-            let path = fixture.path().to_path_buf();
-            (vec![path], Some(fixture))
-        } else {
-            (roots, None)
+            return Ok(());
         }
+
+        roots
     };
 
     // 3. Collect active processes for lifecycle correlation

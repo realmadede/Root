@@ -1,0 +1,24 @@
+.TH ROOT-GUI 1 "October 2026" "Root 0.1.0" "User Commands"
+.SH NAME
+root-gui \- graphical desktop interface for Root resource inspection
+.SH SYNOPSIS
+.B root-gui
+.SH DESCRIPTION
+.B root-gui
+is the native desktop interface for Root, built with GTK4 and Libadwaita. It presents an intuitive, responsive graphical visualization of system telemetry, memory distribution, coding agent footprints, and active processes.
+.PP
+The graphical interface connects directly to the core Rust platform engine without requiring background daemons, cloud connections, or administrative privileges.
+.SH KEYBOARD SHORTCUTS
+.TP
+.B Ctrl+1 .. Ctrl+7
+Navigate directly across views (Overview, Resources, Agents, Processes, Activity, Schedule, Settings).
+.TP
+.B Ctrl+R, F5
+Refresh system telemetry and process snapshot immediately.
+.TP
+.B Ctrl+Q
+Gracefully quit the application.
+.SH AUTHORS
+Raphael Madede <bagomwaraphael@gmail.com> and Root Contributors.
+.SH SEE ALSO
+.BR root (1)
