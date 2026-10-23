@@ -163,31 +163,28 @@ fn test_03_resource_identity_change_rejection() {
     let file = env.write_file("identity_changed.tmp", b"content v1");
     let candidate = env.make_candidate(&file, ResourceCategory::BuildArtifact);
 
-    // Re-create the file to give it a new inode
-    fs::remove_file(&file).unwrap();
-    let file_v2 = env.write_file("identity_changed.tmp", b"content v2 with new inode");
-    let new_meta = fs::symlink_metadata(&file_v2).unwrap();
+    // Create substitute file while original exists to guarantee a distinct inode,
+    // then atomically rename over the original path.
+    let substitute = env.write_file("identity_changed_substitute.tmp", b"content v2 with new inode");
+    fs::rename(&substitute, &file).unwrap();
 
-    // If new inode differs from candidate snapshot, authorization must be denied
-    if new_meta.ino() != candidate.location.inode {
-        let request = AuthorizationRequest {
-            candidate: candidate.clone(),
-            requested_action: ProposedAction::Quarantine,
-            classification: ProtectionTier::ObsoleteTransient,
-            invoking_uid: env.sandbox.operator_uid(),
-            explicit_user_consent: false,
-            consent_record: None,
-            sandbox_root: None,
-            allow_multi_link: true,
-        };
+    let request = AuthorizationRequest {
+        candidate: candidate.clone(),
+        requested_action: ProposedAction::Quarantine,
+        classification: ProtectionTier::ObsoleteTransient,
+        invoking_uid: env.sandbox.operator_uid(),
+        explicit_user_consent: false,
+        consent_record: None,
+        sandbox_root: None,
+        allow_multi_link: true,
+    };
 
-        let decision = AuthorizationEngine::authorize(&request);
-        match decision {
-            root_guardian::AuthorizationDecision::Denied { reason, .. } => {
-                assert_eq!(reason, RejectionReason::FilesystemIdentityChanged);
-            }
-            _ => panic!("Expected authorization denial due to inode identity mismatch"),
+    let decision = AuthorizationEngine::authorize(&request);
+    match decision {
+        root_guardian::AuthorizationDecision::Denied { reason, .. } => {
+            assert_eq!(reason, RejectionReason::FilesystemIdentityChanged);
         }
+        _ => panic!("Expected authorization denial due to inode identity mismatch"),
     }
 }
 

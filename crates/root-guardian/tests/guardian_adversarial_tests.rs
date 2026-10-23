@@ -231,9 +231,10 @@ fn test_adversarial_04_modified_resource_identity() {
     let file = env.write_file("mod_identity.dat", b"initial version");
     let candidate = env.make_candidate(&file, ResourceCategory::BuildArtifact);
 
-    // Unlink and recreate with different inode
-    fs::remove_file(&file).unwrap();
-    let _ = env.write_file("mod_identity.dat", b"substituted second version");
+    // Create substitute file while original exists to guarantee a distinct inode,
+    // then atomically rename over the original path.
+    let substitute = env.write_file("mod_identity_substitute.dat", b"substituted second version");
+    fs::rename(&substitute, &file).unwrap();
 
     let request = AuthorizationRequest::new(
         candidate,
