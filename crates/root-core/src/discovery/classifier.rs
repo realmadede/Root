@@ -169,8 +169,8 @@ impl ResourceClassifier {
         }
 
         // 2. Check for active presence markers on disk
-        let path_str = path.to_string_lossy();
-        if path_str.contains("presence/session_active.lock") {
+        let path_str_normalized = path.to_string_lossy().replace('\\', "/");
+        if path_str_normalized.contains("presence/session_active.lock") {
             return LifecycleAssessment::active(
                 "Active presence lockfile indicates running agent session".to_string(),
                 None,

@@ -411,6 +411,9 @@ impl AuthorizationEngine {
         if meta.is_symlink() {
             return Err(RejectionReason::SymlinkJailEscape);
         }
+        if meta.is_dir() {
+            return Err(RejectionReason::FilesystemIdentityChanged);
+        }
         if meta.dev() != expected_dev || meta.ino() != expected_ino {
             return Err(RejectionReason::FilesystemIdentityChanged);
         }

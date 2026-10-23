@@ -24,6 +24,13 @@ pub struct DiscoveryRule {
 impl DiscoveryRule {
     /// Tests whether a candidate path matches this rule's detection pattern.
     pub fn matches(&self, path_str: &str) -> bool {
+        let normalized = if path_str.contains('\\') {
+            path_str.replace('\\', "/")
+        } else {
+            path_str.to_string()
+        };
+        let path_str = normalized.as_str();
+
         match self.rule_id.as_str() {
             // Antigravity rules
             "antigravity-auth" => {
