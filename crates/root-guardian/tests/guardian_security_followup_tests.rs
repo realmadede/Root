@@ -2,17 +2,22 @@
 use std::{
     fs::{self, File},
     os::unix::fs::MetadataExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use tempfile::TempDir;
 
-use root_core::model::{
-    FileType, ProposedAction, ProtectionTier, ResourceCandidate, ResourceCategory, ResourceId,
-    ResourceLocation, ResourceMetadata, ResourceOwnership, StorageMeasurement,
+use root_core::{
+    error::RootError,
+    model::{
+        FileType, ProposedAction, ProtectionTier, RejectionReason, ResourceCandidate,
+        ResourceCategory, ResourceId, ResourceLocation, ResourceMetadata, ResourceOwnership,
+        StorageMeasurement,
+    },
 };
 use root_guardian::{
-    crypto::sha256_file, sha256_hex, AuthorizationEngine, AuthorizationRequest, FixtureSandbox,
-    JournalRecord, RecoveryJournal, TransactionEngine, TransactionState,
+    crypto::sha256_file, sha256_hex, AuthorizationDecision, AuthorizationEngine,
+    AuthorizationRequest, ConsentRecord, FixtureSandbox, JournalRecord, RecoveryJournal,
+    TransactionEngine, TransactionState,
 };
 
 struct TestEnv {
@@ -44,6 +49,31 @@ impl TestEnv {
         }
         fs::write(&full, content).unwrap();
         full
+    }
+
+    fn make_candidate(&self, file_path: &Path, category: ResourceCategory) -> ResourceCandidate {
+        let meta = fs::symlink_metadata(file_path).expect("File must exist to create candidate");
+        let uid = self.sandbox.operator_uid();
+
+        ResourceCandidate {
+            id: ResourceId::from_path_and_inode(file_path, meta.dev(), meta.ino()),
+            location: ResourceLocation::new(file_path.to_path_buf(), None, meta.dev(), meta.ino()),
+            category,
+            metadata: ResourceMetadata {
+                file_type: FileType::RegularFile,
+                storage: StorageMeasurement::from_raw(meta.len(), meta.blocks(), 1),
+                permissions_mode: meta.mode() & 0o777,
+                mtime_epoch_secs: meta.mtime(),
+                atime_epoch_secs: meta.atime(),
+                ctime_epoch_secs: meta.ctime(),
+            },
+            ownership: ResourceOwnership {
+                uid,
+                gid: uid,
+                is_current_user: true,
+            },
+            associated_agent: None,
+        }
     }
 }
 
@@ -285,4 +315,230 @@ fn test_followup_authorization_boundaries_unconditional_denial() {
         !decision_foreign.is_authorized(),
         "Foreign UID must be rejected"
     );
+}
+
+#[test]
+fn test_followup_parent_directory_swap_detection() {
+    let env = TestEnv::new();
+    let parent_a = env.sandbox.root().join("parent_a");
+    fs::create_dir_all(&parent_a).unwrap();
+    let file = parent_a.join("data.txt");
+    fs::write(&file, b"sample content").unwrap();
+
+    let meta = fs::symlink_metadata(&file).unwrap();
+    let pmeta_a = fs::symlink_metadata(&parent_a).unwrap();
+
+    // Revalidation with matching parent succeeds
+    let ok_res = AuthorizationEngine::revalidate_full(
+        &file,
+        meta.dev(),
+        meta.ino(),
+        env.sandbox.operator_uid(),
+        Some(pmeta_a.dev()),
+        Some(pmeta_a.ino()),
+        Some(env.sandbox.root()),
+    );
+    assert!(ok_res.is_ok());
+
+    // Create a replacement directory with a distinct inode
+    let parent_b = env.sandbox.root().join("parent_b");
+    fs::create_dir_all(&parent_b).unwrap();
+    let pmeta_b = fs::symlink_metadata(&parent_b).unwrap();
+    assert_ne!(pmeta_a.ino(), pmeta_b.ino());
+
+    // Swap directory: rename parent_a out, move parent_b to parent_a
+    let parent_a_bak = env.sandbox.root().join("parent_a_bak");
+    fs::rename(&parent_a, &parent_a_bak).unwrap();
+    fs::rename(&parent_b, &parent_a).unwrap();
+
+    // Recreate the target file inside the swapped parent
+    fs::write(&file, b"sample content").unwrap();
+    let new_meta = fs::symlink_metadata(&file).unwrap();
+
+    // Pre-mutation revalidation must catch the altered parent inode
+    let err_res = AuthorizationEngine::revalidate_full(
+        &file,
+        new_meta.dev(),
+        new_meta.ino(),
+        env.sandbox.operator_uid(),
+        Some(pmeta_a.dev()),
+        Some(pmeta_a.ino()), // Old parent inode expectation
+        Some(env.sandbox.root()),
+    );
+    assert_eq!(err_res, Err(RejectionReason::ParentDirectoryChanged));
+}
+
+#[test]
+fn test_followup_parent_directory_symlink_swap_detection() {
+    let env = TestEnv::new();
+    let real_parent = env.sandbox.root().join("real_parent");
+    fs::create_dir_all(&real_parent).unwrap();
+    let file = real_parent.join("target.bin");
+    fs::write(&file, b"binary payload").unwrap();
+
+    let meta = fs::symlink_metadata(&file).unwrap();
+    let pmeta_real = fs::symlink_metadata(&real_parent).unwrap();
+
+    // Setup symlink pointing to parent
+    let sym_parent = env.sandbox.root().join("sym_parent");
+    std::os::unix::fs::symlink(&real_parent, &sym_parent).unwrap();
+    let sym_file = sym_parent.join("target.bin");
+
+    // Pre-mutation revalidation against a path traversing a symlink parent must reject
+    let err_res = AuthorizationEngine::revalidate_full(
+        &sym_file,
+        meta.dev(),
+        meta.ino(),
+        env.sandbox.operator_uid(),
+        Some(pmeta_real.dev()),
+        Some(pmeta_real.ino()),
+        Some(env.sandbox.root()),
+    );
+    assert_eq!(err_res, Err(RejectionReason::SymlinkJailEscape));
+}
+
+#[test]
+fn test_followup_consent_exact_boundary_conditions() {
+    let id = ResourceId::new("boundary-test-candidate");
+    let path = PathBuf::from("/tmp/sandbox/leaf.txt");
+    let created_at: i64 = 1_000_000;
+    let ttl_secs: u64 = 300;
+    let expires_at: i64 = created_at + ttl_secs as i64;
+
+    let consent = ConsentRecord::with_explicit_time(
+        id,
+        ProposedAction::Quarantine,
+        path,
+        "nonce-test".into(),
+        created_at,
+        ttl_secs,
+    );
+
+    // 1. Prior to creation timestamp — invalid
+    assert!(!consent.is_valid_at(created_at - 1));
+
+    // 2. Exact creation timestamp — valid
+    assert!(consent.is_valid_at(created_at));
+
+    // 3. Immediately prior to expiration — valid
+    assert!(consent.is_valid_at(expires_at - 1));
+
+    // 4. Exact expiration timestamp — invalid (strictly expired)
+    assert!(!consent.is_valid_at(expires_at));
+
+    // 5. Subsequent to expiration timestamp — invalid
+    assert!(!consent.is_valid_at(expires_at + 1));
+}
+
+#[test]
+fn test_followup_restoration_conflict_directory_and_dangling_symlink() {
+    let mut env = TestEnv::new();
+    let file = env.write_file("restore_target.txt", b"essential content");
+    let candidate = env.make_candidate(&file, ResourceCategory::BuildArtifact);
+
+    let request = AuthorizationRequest::new(
+        candidate,
+        ProposedAction::Quarantine,
+        ProtectionTier::ObsoleteTransient,
+        env.sandbox.operator_uid(),
+    )
+    .with_multi_link(true);
+
+    let tx = TransactionEngine::quarantine(&env.sandbox, &mut env.journal, &request).unwrap();
+    assert!(!file.exists(), "Source file moved into quarantine");
+
+    // Case A: Destination re-occupied by a newly created directory
+    fs::create_dir_all(&file).unwrap();
+    let res_dir = TransactionEngine::restore(&env.sandbox, &mut env.journal, &tx.transaction_id);
+    assert!(
+        matches!(res_dir, Err(RootError::RestorationConflict { .. })),
+        "Restoration must fail when destination is occupied by a directory"
+    );
+    fs::remove_dir(&file).unwrap();
+
+    // Case B: Destination re-occupied by a dangling symlink (rejected via sandbox policy or conflict check)
+    let nonexistent_target = env.sandbox.root().join("does_not_exist.txt");
+    std::os::unix::fs::symlink(&nonexistent_target, &file).unwrap();
+    let res_sym = TransactionEngine::restore(&env.sandbox, &mut env.journal, &tx.transaction_id);
+    assert!(
+        matches!(
+            res_sym,
+            Err(RootError::PolicyViolation { .. }) | Err(RootError::RestorationConflict { .. })
+        ),
+        "Restoration must fail when destination is occupied by a dangling symlink"
+    );
+    fs::remove_file(&file).unwrap();
+
+    // Case C: Clean destination path allows successful restoration
+    let res_clean = TransactionEngine::restore(&env.sandbox, &mut env.journal, &tx.transaction_id);
+    assert!(
+        res_clean.is_ok(),
+        "Restoration must succeed once path conflict is resolved"
+    );
+    assert_eq!(fs::read(&file).unwrap(), b"essential content");
+}
+
+#[test]
+fn test_followup_hard_link_rejection_and_explicit_allow() {
+    let env = TestEnv::new();
+    let primary = env.write_file("primary.dat", b"shared inode data");
+    let link_path = env.sandbox.root().join("primary_link.dat");
+    fs::hard_link(&primary, &link_path).unwrap();
+
+    let candidate = env.make_candidate(&primary, ResourceCategory::BuildArtifact);
+
+    // 1. By default, multi-link resource must be denied authorization
+    let req_default = AuthorizationRequest::new(
+        candidate.clone(),
+        ProposedAction::Quarantine,
+        ProtectionTier::ObsoleteTransient,
+        env.sandbox.operator_uid(),
+    );
+    let decision_default = AuthorizationEngine::authorize(&req_default);
+    match decision_default {
+        AuthorizationDecision::Denied { reason, .. } => {
+            assert_eq!(reason, RejectionReason::HardLinkShared);
+        }
+        _ => panic!("Multi-link files must be rejected by default"),
+    }
+
+    // 2. Explicit authorization allows proceeding
+    let req_allowed = req_default.with_multi_link(true);
+    let decision_allowed = AuthorizationEngine::authorize(&req_allowed);
+    assert!(
+        decision_allowed.is_authorized(),
+        "Explicit multi-link flag must permit authorization"
+    );
+}
+
+#[test]
+fn test_followup_consent_mismatched_action() {
+    let env = TestEnv::new();
+    let file = env.write_file("action_mismatch.txt", b"action test payload");
+    let candidate = env.make_candidate(&file, ResourceCategory::BuildArtifact);
+
+    let consent = ConsentRecord::new(
+        candidate.id.clone(),
+        ProposedAction::Quarantine,
+        file,
+        "nonce-action-guard".into(),
+        300,
+    );
+
+    // Requesting a different action (e.g. Inspect) with quarantine consent must be denied
+    let req = AuthorizationRequest::new(
+        candidate,
+        ProposedAction::Inspect,
+        ProtectionTier::UserConfirmRequired,
+        env.sandbox.operator_uid(),
+    )
+    .with_consent(consent);
+
+    let decision = AuthorizationEngine::authorize(&req);
+    match decision {
+        AuthorizationDecision::Denied { reason, .. } => {
+            assert_eq!(reason, RejectionReason::ConsentNonceMismatch);
+        }
+        _ => panic!("Mismatched action on consent record must be rejected"),
+    }
 }

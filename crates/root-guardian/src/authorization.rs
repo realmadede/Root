@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Cryptographically traceable consent record authorizing an action against an identified resource.
+/// Structured consent record authorizing an action against an identified resource.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConsentRecord {
     pub consent_id: String,
@@ -68,7 +68,7 @@ impl ConsentRecord {
     }
 }
 
-/// Cryptographically traceable or unique receipt confirming explicit authorization.
+/// Unique receipt confirming explicit authorization.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthorizationReceipt {
     pub receipt_id: String,

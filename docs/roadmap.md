@@ -222,12 +222,12 @@ gantt
   - Transaction durability specification (`docs/phase-11-transaction-guarantees.md`) detailing the 8-state lifecycle machine, ordered journal durability protocol, conflict-aware restoration, and streaming SHA-256 integrity.
   - Platform mutation readiness matrix (`docs/phase-11-platform-mutation-matrix.md`) assessing Linux, macOS, and Windows capabilities across 9 operational domains.
   - Pure Rust streaming SHA-256 hasher (`Sha256Hasher`, `sha256_stream`) processing files in 64 KiB chunks with continuous file descriptor revalidation, verified against FIPS 180-4 / NIST CAVP vectors.
-  - Cryptographic consent records (`ConsentRecord`) binding single-use nonces, target resource IDs, exact canonical paths, approved action constraints, and Unix epoch expiration timestamps.
+  - Structured consent records (`ConsentRecord`) binding single-use nonces, target resource IDs, exact canonical paths, approved action constraints, and Unix epoch expiration timestamps.
   - Hard link shared storage protection rejecting multi-link targets (`st_nlink > 1`) unless explicit multi-link consent is granted.
   - Sandbox scope containment asserting canonical boundary containment across relative, absolute, and symlinked target paths.
-  - Comprehensive adversarial test suite (`crates/root-guardian/tests/guardian_adversarial_tests.rs`) covering 32 test scenarios (30 threat vectors + 2 pipeline ordering tests), expanding passing workspace tests from 208 to 240.
+  - Comprehensive adversarial and security regression test suites in `crates/root-guardian/tests/` covering 32 adversarial threat scenarios, follow-up security regressions, and transaction guarantees, bringing verified passing workspace tests to 250.
   - Automated continuous assurance script (`.github/scripts/check_invariants.py`) enforcing 11 repository invariants including emoji prohibition, confidentiality, headless isolation, CLI mutation exclusion, and unprivileged execution.
-- **Safety Gate**: Production mutation remains completely disabled across all operating systems, CLI subcommands, GUI controls, timers, and monitoring routines; 240 workspace tests pass cleanly.
+- **Safety Gate**: Production mutation remains completely disabled across all operating systems, CLI subcommands, GUI controls, timers, and monitoring routines; 250 workspace tests pass cleanly.
 
 ---
 

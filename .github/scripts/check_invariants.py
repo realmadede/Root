@@ -47,7 +47,7 @@ FORBIDDEN_CORE_DEPENDENCIES = {
 }
 
 FORBIDDEN_TRACKED_PATTERNS = [
-    re.compile(r"^AGENTS\.md$"),
+    re.compile(r"(?:^|/)AGENTS\.md$"),
     re.compile(r"^.*\.pem$"),
     re.compile(r"^.*\.key$"),
     re.compile(r"^.*\.pfx$"),
@@ -57,6 +57,10 @@ FORBIDDEN_TRACKED_PATTERNS = [
 ]
 
 PROHIBITED_CLI_SUBCOMMANDS = {
+    "clean", "delete", "purge", "quarantine", "destroy", "kill", "restore"
+}
+
+PROHIBITED_CLI_FLAGS = {
     "clean", "delete", "purge", "quarantine", "destroy", "kill", "restore"
 }
 
@@ -143,7 +147,7 @@ def check_core_architecture_isolation() -> list[str]:
 
 
 def check_no_production_mutation_cli() -> list[str]:
-    """Verify that the production CLI does not export mutation subcommands."""
+    """Verify that the production CLI does not export mutation subcommands or mutation flags."""
     violations = []
     cli_args_file = "crates/root-cli/src/args.rs"
     if not os.path.isfile(cli_args_file):
@@ -165,6 +169,14 @@ def check_no_production_mutation_cli() -> list[str]:
         if re.search(pattern, enum_body, re.IGNORECASE):
             violations.append(
                 f"{cli_args_file}: Commands enum exports prohibited production mutation variant: '{variant}'"
+            )
+
+    # Check for prohibited CLI flags across all argument structs
+    for flag in PROHIBITED_CLI_FLAGS:
+        flag_pattern = rf"\b(?:pub\s+)?{flag}\s*:\s*bool\b"
+        if re.search(flag_pattern, content, re.IGNORECASE):
+            violations.append(
+                f"{cli_args_file}: CLI args struct exports prohibited mutation flag: '{flag}'"
             )
 
     return violations
@@ -228,7 +240,7 @@ def check_unrestricted_filesystem_deletion() -> list[str]:
                     if in_test_module:
                         continue
 
-                    if "remove_file(" in line or "remove_dir_all(" in line or "remove_dir(" in line:
+                    if re.search(r"\b(?:fs::|std::fs::)?remove_(?:file|dir_all|dir)\s*\(", line):
                         # Direct deletion of user resources is prohibited outside approved coordinators
                         violations.append(
                             f"{file_path}:{line_idx}: Unrestricted deletion call in production code: '{line.strip()}'"
@@ -240,14 +252,7 @@ def check_unrestricted_filesystem_deletion() -> list[str]:
 def check_no_mutation_from_monitor_or_scheduler() -> list[str]:
     """Verify that monitor and scheduler modules do not call or import Guardian mutation structures."""
     violations = []
-    checked_files = [
-        "crates/root-cli/src/monitor.rs",
-        "crates/root-cli/src/schedule.rs",
-        "crates/root-platform/src/monitor.rs",
-        "crates/root-platform/src/linux/scheduler.rs",
-        "crates/root-platform/src/macos/launchd.rs",
-        "crates/root-platform/src/windows/task_scheduler.rs"
-    ]
+    crates_dir = "crates"
 
     prohibited_tokens = [
         "TransactionCoordinator",
@@ -256,9 +261,20 @@ def check_no_mutation_from_monitor_or_scheduler() -> list[str]:
         "ProposedAction::Prune"
     ]
 
-    for file_path in checked_files:
-        if not os.path.isfile(file_path):
+    checked_files = set()
+    for root_dir, _, filenames in os.walk(crates_dir):
+        if "/tests" in root_dir or root_dir.endswith("/tests"):
             continue
+        for filename in filenames:
+            if not filename.endswith(".rs"):
+                continue
+            file_path = os.path.join(root_dir, filename)
+            # Scan any file in monitor or scheduler modules
+            lower_path = file_path.lower()
+            if "monitor" in lower_path or "sched" in lower_path or "launchd" in lower_path:
+                checked_files.add(file_path)
+
+    for file_path in sorted(checked_files):
         with open(file_path, "r", encoding="utf-8") as f:
             for line_idx, line in enumerate(f, start=1):
                 for token in prohibited_tokens:

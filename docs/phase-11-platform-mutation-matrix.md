@@ -11,16 +11,16 @@
 
 | Mutation Security Capability | Linux (Reference) | macOS (Darwin) | Windows (Win32 / NTFS) |
 |---|---|---|---|
-| **Resource Identity Verification** | **Verified**<br>`(st_dev, st_ino)` via `lstat` | **Partially Verified**<br>`(st_dev, st_ino)` via `lstat`<br>(APFS clones share extents) | **Verified**<br>32-bit Volume Serial + 128-bit `FILE_ID_INFO` |
-| **Race-Resistant Traversal** | **Verified**<br>`openat2` (`RESOLVE_BENEATH`), `O_NOFOLLOW` | **Partially Verified**<br>`openat` descriptor-relative, `O_NOFOLLOW` | **Partially Verified**<br>`CreateFileW` with `FILE_FLAG_OPEN_REPARSE_POINT` |
-| **Atomic No-Replace Relocation** | **Verified**<br>`SYS_renameat2` with `RENAME_NOREPLACE` | **Partially Verified**<br>`renamex_np(..., RENAME_EXCL)` (Darwin 10.12+) | **Partially Verified**<br>`MoveFileExW` (`MOVEFILE_FAIL_IF_EXISTS`) |
-| **Same-Filesystem Quarantine Feasibility** | **Verified**<br>Same-device quarantine verified via Level 1 fixtures | **Not Tested**<br>APFS container staging feasible; not verified | **Not Tested**<br>NTFS volume staging feasible; not verified |
-| **Restoration Feasibility** | **Verified**<br>Conflict-aware atomic rollback verified | **Not Tested**<br>Atomic rollback feasible via `renamex_np` | **Not Tested**<br>Atomic rollback feasible via `MoveFileExW` |
-| **Recovery Journal Durability** | **Verified**<br>Append-only JSONL with `file.sync_data()` | **Partially Verified**<br>`fcntl(F_FULLFSYNC)` required for APFS | **Partially Verified**<br>`FlushFileBuffers` required for NTFS |
-| **File Metadata Preservation** | **Verified**<br>POSIX mode bits, timestamps, UID/GID | **Partially Verified**<br>BSD flags and ACLs require Darwin xattr APIs | **Unsupported**<br>POSIX permissions do not exist on Windows |
-| **Hard-Link Handling** | **Verified**<br>`st_nlink > 1` detection & pnpm protection | **Verified**<br>`st_nlink > 1` detection supported | **Partially Verified**<br>`nNumberOfLinks` from `BY_HANDLE_FILE_INFORMATION` |
-| **Sparse-File Handling** | **Verified**<br>`st_blocks * 512` vs apparent length | **Partially Verified**<br>`st_blocks` reflects APFS extent sharing | **Partially Verified**<br>`FILE_ATTRIBUTE_SPARSE_FILE` detection |
-| **Crash Recovery Guarantees** | **Verified**<br>Idempotent journal replay verified | **Not Tested**<br>Requires live crash injection on APFS | **Not Tested**<br>Requires live crash injection on NTFS |
+| **Resource Identity Verification** | **Verified**<br>`(st_dev, st_ino)` via `lstat` | **Not Implemented**<br>Mutation compiled out<br>(Inspection uses `lstat`) | **Not Implemented**<br>Mutation compiled out<br>(Inspection uses volume ID + path) |
+| **Race-Resistant Traversal** | **Mitigated (Path-Based)**<br>Symlink non-follow, depth bounds, root checks (`openat2` capability probed) | **Mitigated (Path-Based)**<br>Symlink non-follow, depth bounds (Inspection only) | **Mitigated (Path-Based)**<br>Reparse point non-follow, depth bounds (Inspection only) |
+| **Atomic No-Replace Relocation** | **Verified in Fixtures**<br>`SYS_renameat2` with `RENAME_NOREPLACE` via `AT_FDCWD` | **Not Implemented**<br>Mutation compiled out | **Not Implemented**<br>Mutation compiled out |
+| **Same-Filesystem Quarantine Feasibility** | **Verified in Fixtures**<br>Same-device quarantine verified via Level 1 fixtures | **Not Implemented**<br>Mutation compiled out | **Not Implemented**<br>Mutation compiled out |
+| **Restoration Feasibility** | **Verified in Fixtures**<br>Conflict-aware atomic rollback verified | **Not Implemented**<br>Mutation compiled out | **Not Implemented**<br>Mutation compiled out |
+| **Recovery Journal Durability** | **Verified in Fixtures**<br>Append-only JSONL with `file.sync_all()` | **Not Implemented**<br>Mutation compiled out | **Not Implemented**<br>Mutation compiled out |
+| **File Metadata Preservation** | **Verified in Fixtures**<br>POSIX mode bits, timestamps, UID/GID | **Not Implemented**<br>Mutation compiled out | **Not Implemented**<br>Mutation compiled out |
+| **Hard-Link Handling** | **Verified in Fixtures**<br>`st_nlink > 1` default rejection & explicit consent | **Not Implemented**<br>Mutation compiled out | **Not Implemented**<br>Mutation compiled out |
+| **Sparse-File Handling** | **Verified in Fixtures**<br>`st_blocks * 512` vs apparent length | **Not Implemented**<br>Mutation compiled out | **Not Implemented**<br>Mutation compiled out |
+| **Crash Recovery Guarantees** | **Verified in Fixtures**<br>Idempotent journal replay verified | **Not Implemented**<br>Mutation compiled out | **Not Implemented**<br>Mutation compiled out |
 | **Production Mutation Readiness** | **PROHIBITED**<br>(Gated until Phase 12) | **UNSUPPORTED**<br>(Compile-time disabled) | **UNSUPPORTED**<br>(Compile-time disabled) |
 
 ---
@@ -28,8 +28,8 @@
 ## 2. Platform Primitives Detailed Evaluation
 
 ### Linux (Reference Implementation)
-- **Strengths**: Native `renameat2(2)` with `RENAME_NOREPLACE` guarantees true atomic same-filesystem moves without race conditions. Descriptor-relative `openat2` with `RESOLVE_BENEATH` and `RESOLVE_NO_SYMLINKS` prevents path resolution jail escapes. Linux 5.4+ `pidfd_open` eliminates PID reuse races.
-- **Limitations**: Cross-filesystem moves (`EXDEV`) cannot be atomic; Root strictly rejects cross-device operations instead of falling back to non-atomic copy-and-delete.
+- **Strengths**: Native `renameat2(2)` with `RENAME_NOREPLACE` guarantees atomic same-filesystem moves without overwriting destinations. Linux 5.4+ `pidfd_open` eliminates PID reuse races. `openat2` capability is probed empirically.
+- **Limitations**: Cross-filesystem moves (`EXDEV`) cannot be atomic; Root strictly rejects cross-device operations instead of falling back to non-atomic copy-and-delete. Path-based `renameat2(AT_FDCWD, ...)` retains a sub-millisecond race window for parent directory swaps after `revalidate_full`.
 - **Status in Phase 11**: Fully exercised in Level 1 synthetic fixture tests; production mutation remains permanently disabled.
 
 ### macOS (Darwin)

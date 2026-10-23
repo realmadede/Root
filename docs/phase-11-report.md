@@ -74,9 +74,9 @@ The Phase 11 authorization model enforces an 11-stage serial decision pipeline:
 #### Authorization Invariant Factors:
 - **Production Lock**: Gated by `request.fixture_mode`. Production runs unconditionally yield `RejectionReason::ProductionMutationDisabled`.
 - **Platform Scope**: Linux is currently verified for transactional quarantine. Non-Linux platforms reject mutations with `RejectionReason::NonLinuxMutationUnsupported`.
-- **Protection Tiers**: Tier 1 (`StrictlyProtected`) and Tier 0 (`NonActionable`) reject unconditionally. Tier 2 (`UserConfirmRequired`) mandates cryptographically bound interactive user consent.
-- **Parent Directory Pinning**: Ensures the containing directory cannot be unlinked or swapped via rename races between inspection and execution.
-- **Cryptographic Consent Records**: Include single-use cryptographic nonces, target resource IDs, exact canonical paths, approved action constraints, and Unix epoch expiration timestamps (default 60-second TTL).
+- **Protection Tiers**: Tier 1 (`StrictlyProtected`) and Tier 0 (`NonActionable`) reject unconditionally. Tier 2 (`UserConfirmRequired`) mandates explicit interactive user consent.
+- **Parent Directory Pinning**: Ensures the containing directory dev and inode are checked immediately before mutation to detect directory swaps.
+- **Structured Consent Records**: Include single-use nonces, target resource IDs, exact canonical paths, approved action constraints, and Unix epoch expiration timestamps (with configurable TTL).
 
 ---
 
@@ -219,15 +219,19 @@ All 11 checks execute and pass cleanly on the current codebase.
 | `root-cli` (`cli_tests.rs`) | 20 | 20 | 0 |
 | `root-cli` (`monitor_tests.rs`) | 25 | 25 | 0 |
 | `root-cli` (`schedule_tests.rs`) | 30 | 30 | 0 |
-| `root-core` (unit tests) | 11 | 11 | 0 |
-| `root-guardian` (`guardian_transaction_tests.rs`) | 15 | 15 | 0 |
+| `root-core` (unit tests in `src/lib.rs`) | 12 | 12 | 0 |
+| `root-core` (`discovery_tests.rs`) | 7 | 7 | 0 |
+| `root-core` (`security_tests.rs`) | 8 | 8 | 0 |
+| `root-guardian` (unit tests in `src/lib.rs`) | 14 | 14 | 0 |
+| `root-guardian` (`guardian_transaction_tests.rs`) | 16 | 16 | 0 |
 | `root-guardian` (`guardian_adversarial_tests.rs`) | 32 | 32 | 0 |
-| `root-gui` (unit & integration tests) | 27 | 27 | 0 |
-| `root-platform` (unit tests) | 36 | 36 | 0 |
+| `root-guardian` (`guardian_security_followup_tests.rs`) | 12 | 12 | 0 |
+| `root-gui` (`gui_view_model_tests.rs`) | 26 | 26 | 0 |
+| `root-platform` (unit tests in `src/lib.rs`) | 36 | 36 | 0 |
 | `root-platform` (`platform_engine_tests.rs`) | 12 | 12 | 0 |
-| **Total Workspace Tests** | **240** | **240** | **0** |
+| **Total Workspace Tests** | **250** | **250** | **0** |
 
-All 240 tests execute and pass cleanly.
+All 250 tests execute and pass cleanly.
 
 ---
 
@@ -249,7 +253,11 @@ All 240 tests execute and pass cleanly.
    While `pidfd_send_signal` guarantees against PID reuse on Linux 5.4+, signal dispatching is permanently disabled across all platforms. Any future enablement requires human authorization and isolated container testing.
 3. **Mount Point Boundary Detection**:
    Cross-device rename operations fail with `EXDEV`. Root detects device ID boundaries during inspection; cross-filesystem quarantine remains unsupported and will reject rather than copy.
-4. **Phase 12 Prerequisites**:
+4. **Path-Based TOCTOU Window**:
+   Pre-rename revalidation checks file and parent directory dev and inode numbers immediately prior to mutation. However, because relocation executes via `renameat2(AT_FDCWD, ...)` on string paths, an unavoidable sub-millisecond race window remains against local adversaries rapidly replacing parent directory hierarchies. File descriptor relative operations (`openat2` with `RESOLVE_BENEATH` and directory fds) represent the long-term defense.
+5. **In-Memory Consent Nonces**:
+   Consent records are currently evaluated in-memory within the active execution context and are not persisted to a durable revocation store across process restarts.
+6. **Phase 12 Prerequisites**:
    Phase 12 (1.0 Production Hardening, Packaging, and Distribution) must focus on packaging standalone binaries, computing release SHA-256 checksums, and building distribution packages without activating production cleanup commands until an explicit human security review signs off.
 
 ---

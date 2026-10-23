@@ -3,7 +3,7 @@
 
 > [!IMPORTANT]
 > **GOVERNANCE INVARIANT: ELIGIBILITY DOES NOT EQUAL AUTHORIZATION**  
-> In Root, discovering that a resource is eligible for consideration never automatically authorizes its mutation. Every mutation requires explicit multi-factor verification, cryptographic identity binding, and non-replayable consent. Production mutation remains disabled.
+> In Root, discovering that a resource is eligible for consideration never automatically authorizes its mutation. Every mutation requires explicit multi-factor verification, strict identity binding, and non-replayable consent. Production mutation remains disabled.
 
 ---
 
@@ -31,7 +31,7 @@ flowchart TD
 3. **Considered for Cleanup**: Evaluates candidate against lifecycle markers and project boundaries.
 4. **Protected or Excluded**: Resources that are unknown, active, shared, or uncommitted are permanently excluded (`StrictlyProtected`).
 5. **Presented to User**: Candidate is displayed with exact nominal path, apparent size, allocated size, classification tier, rule evidence, and consequences. No action is taken.
-6. **User Authorizes Specific Action**: Operator grants consent for an individual resource. Produces a cryptographically bound `ConsentRecord` containing a unique nonce, creation timestamp, and strict expiration TTL (e.g., 300s).
+6. **User Authorizes Specific Action**: Operator grants consent for an individual resource. Produces a structured `ConsentRecord` containing a unique nonce, creation timestamp, and strict expiration TTL (e.g., 300s).
 7. **Guardian Validates Authorization**: `AuthorizationEngine` validates the request across all 8 security criteria, issuing an immutable `AuthorizationReceipt`.
 8. **Operation Prepared**: Destination path in isolated staging is allocated with collision checks; journal records transaction intent (`Prepared`) and syncs to disk.
 9. **Execution in Test Environment**: Immediate pre-mutation revalidation confirms file identity, parent directory identity, and ownership before invoking same-filesystem atomic relocation (`RENAME_NOREPLACE`).
