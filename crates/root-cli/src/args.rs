@@ -4,7 +4,7 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(
     name = "root",
-    author = "Raphael Madede <bagomwaraphael@gmail.com>",
+    author = "Madede <bagomwaraphael@gmail.com>",
     version = env!("CARGO_PKG_VERSION"),
     about = "Deterministic, security-first Linux resource management utility",
     long_about = "Root is a deterministic, security-first Linux system utility engineered to help developers understand, audit, and safely inspect system resources accumulated through agentic coding workflows."

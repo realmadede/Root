@@ -46,7 +46,7 @@ We welcome responsible security reports from security researchers, systems progr
 If you discover a security vulnerability (such as a path traversal flaw, race condition, symlink attack, or privilege issue):
 1. **Do not create a public GitHub issue.**
 2. Send a detailed report via encrypted email to:
-   **security@bagomwa.com** (or to project lead Raphael Madede at `bagomwaraphael@gmail.com`).
+   **security@bagomwa.com** (or to project lead Madede at `bagomwaraphael@gmail.com`).
 3. Include:
    - Detailed description of the vulnerability.
    - Proof-of-concept (PoC) or reproduction steps.

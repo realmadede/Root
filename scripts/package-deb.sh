@@ -73,7 +73,7 @@ Section: utils
 Priority: optional
 Architecture: ${ARCH}
 Installed-Size: ${INSTALLED_SIZE}
-Maintainer: Raphael Madede <bagomwaraphael@gmail.com>
+Maintainer: Madede <bagomwaraphael@gmail.com>
 Depends: libc6 (>= 2.34), libadwaita-1-0 (>= 1.4), libgtk-4-1 (>= 4.12), libglib2.0-0t64 | libglib2.0-0 (>= 2.76)
 Homepage: https://github.com/realmadede/Root
 Description: Deterministic resource inspection utility for agentic coding workflows

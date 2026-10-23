@@ -58,8 +58,8 @@ All release packages were built using the optimized production profile (`profile
 
 | Filename | Version | OS / Platform | Architecture | Format | Size | SHA-256 Checksum | Validation Status |
 |---|---|---|---|---|---|---|---|
-| **`root_0.1.0-1_amd64.deb`** | `0.1.0-1` | Linux (Debian / Kali / Ubuntu) | `amd64` (x86_64) | Debian `.deb` | 821 KiB | `81d004d5536d54464e42e0feed7604e3b231ff6fa9f5218566ef493db24cdf52` | [VERIFIED] Validated via `dpkg-deb -I`, `dpkg-deb -c` |
-| **`root-v0.1.0-x86_64-unknown-linux-gnu.tar.gz`** | `0.1.0` | Linux (glibc 2.38+) | `x86_64` | Gzip Archive (`.tar.gz`) | 1.35 MiB | `683548898daf5a8a94339c18c7956d08ee7f1f2886850726b0f14cdd4c8d6253` | [VERIFIED] Validated via test unpack, `install.sh`, and `uninstall.sh` |
+| **`root_0.1.0-1_amd64.deb`** | `0.1.0-1` | Linux (Debian / Kali / Ubuntu) | `amd64` (x86_64) | Debian `.deb` | 821 KiB | `f1e10cf596d4e9f66ca9b9bc96050225e575f5c1c06cd7ed6bfbaa400aeabe4f` | [VERIFIED] Validated via `dpkg-deb -I`, `dpkg-deb -c` |
+| **`root-v0.1.0-x86_64-unknown-linux-gnu.tar.gz`** | `0.1.0` | Linux (glibc 2.38+) | `x86_64` | Gzip Archive (`.tar.gz`) | 1.35 MiB | `0262664a51fdc88f9c187d4d81ac9b880019b2fa0c2a7c3ec2d9697027437ee1` | [VERIFIED] Validated via test unpack, `install.sh`, and `uninstall.sh` |
 | **`SHA256SUMS`** | `0.1.0` | Independent | Independent | Plaintext Manifest | 199 B | N/A | [VERIFIED] Verified via `sha256sum -c SHA256SUMS` |
 
 ---

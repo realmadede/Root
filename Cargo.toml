@@ -11,7 +11,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = [" Madede <bagomwaraphael@gmail.com>", "Root Contributors"]
+authors = ["Madede <bagomwaraphael@gmail.com>", "Root Contributors"]
 license = "MIT"
 repository = "https://github.com/realmadede/Root"
 rust-version = "1.85"
