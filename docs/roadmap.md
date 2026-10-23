@@ -237,7 +237,7 @@ gantt
 - **Key Accomplishments**:
   - Configured reproducible, hardened production build profile (`[profile.release]`) in workspace `Cargo.toml` enabling Thin LTO, `codegen-units = 1`, and debuginfo symbol stripping.
   - Hardened target selection across CLI and GUI: eliminated silent fallback to `cwd` or synthetic fixture generation; CLI commands mandate explicit target paths and the GUI uses a native GTK folder chooser dialog.
-  - Packaged validated Tier 1 Linux distribution artifacts: official Debian `.deb` package (`dist/root_0.1.0-1_amd64.deb`) and standalone unprivileged tarball (`dist/root-v0.1.0-x86_64-unknown-linux-gnu.tar.gz`).
+  - Packaged validated Tier 1 Linux distribution artifacts: official Debian `.deb` package (`dist/root_0.1.0-rc.1-1_amd64.deb`) and standalone unprivileged tarball (`dist/root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz`).
   - Implemented desktop integration deliverables: scalable SVG squircle icon, standard-compliant XDG desktop entry (`io.github.realmadede.Root.desktop`), and standard manual pages (`data/man/root.1`, `data/man/root-gui.1`).
   - Provided unprivileged user installation and removal scripts (`install.sh`, `uninstall.sh`) supporting arbitrary prefixes (default: `~/.local`) without elevated privileges.
   - Implemented cryptographic release integrity tooling (`scripts/generate-checksums.sh`) generating validated `SHA256SUMS` manifests.

@@ -15,6 +15,10 @@ fn test_01_cli_argument_validation() {
     assert!(run_with_args(["root", "doctor"]).is_ok());
     assert!(run_with_args(["root", "status"]).is_ok());
     assert!(run_with_args(["root", "inspect", "memory"]).is_ok());
+    assert!(run_with_args(["root", "--version"]).is_ok());
+    assert!(run_with_args(["root", "-V"]).is_ok());
+    assert!(run_with_args(["root", "--help"]).is_ok());
+    assert!(run_with_args(["root", "-h"]).is_ok());
 
     // Scan without explicit target path must fail safely in production
     let no_path_scan = run_with_args(["root", "scan"]);

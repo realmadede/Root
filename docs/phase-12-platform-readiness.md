@@ -32,8 +32,8 @@ Root defines three explicit levels of platform readiness:
   - `root` (CLI): Depends strictly on `libc.so.6` and `libgcc_s.so.1`. Contains zero graphical dependencies and executes seamlessly in headless terminal sessions.
   - `root-gui` (GUI): Depends on standard GTK4 and Libadwaita desktop libraries (`libgtk-4-1`, `libadwaita-1-0`).
 - **Packaging Verified**:
-  - `dist/root_0.1.0-1_amd64.deb`: Built via `dpkg-deb`, validated with control archives and desktop triggers.
-  - `dist/root-v0.1.0-x86_64-unknown-linux-gnu.tar.gz`: Built with user-level installer and uninstaller.
+  - `dist/root_0.1.0-rc.1-1_amd64.deb`: Built via `dpkg-deb`, validated with control archives and desktop triggers.
+  - `dist/root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz`: Built with user-level installer and uninstaller.
 - **Desktop Integration**:
   - Validated desktop launcher: `io.github.realmadede.Root.desktop`.
   - Scalable vector icon: `io.github.realmadede.Root.svg`.

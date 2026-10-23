@@ -109,13 +109,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          prerelease: false
+          prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
           files: |
             dist/*.deb
             dist/*.tar.gz
             dist/SHA256SUMS
           body: |
-            # Root v0.1.0 — Deterministic Resource Inspection Utility
+            # Root v0.1.0-rc.1 — Deterministic Resource Inspection Utility
 
             Root is a deterministic, local-first system resource inspection utility engineered to help developers understand, audit, and safely inspect system resources accumulated through AI coding workflows.
 

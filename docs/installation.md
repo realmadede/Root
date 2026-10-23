@@ -26,7 +26,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 Using `apt` automatically resolves runtime dependencies (`libgtk-4-1`, `libadwaita-1-0`, `libc6`):
 
 ```bash
-sudo apt install ./root_0.1.0-1_amd64.deb
+sudo apt install ./root_0.1.0-rc.1-1_amd64.deb
 ```
 
 *Note: While package manager installation requires administrative authorization to place files in `/usr/bin` and `/usr/share`, Root itself executes strictly as an unprivileged user process.*
@@ -52,8 +52,8 @@ The portable archive allows complete installation without administrative privile
 ### Extraction and Installation
 ```bash
 # Extract the archive
-tar -xzf root-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
-cd root-v0.1.0-x86_64-unknown-linux-gnu
+tar -xzf root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz
+cd root-v0.1.0-rc.1-x86_64-unknown-linux-gnu
 
 # Run the user-level installer (defaults to ~/.local)
 ./install.sh

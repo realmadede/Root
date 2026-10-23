@@ -58,15 +58,15 @@ cargo build --release -p root-gui --features gtk
 
 ### Step 4: Verification of Generated Artifacts
 Confirm artifact existence in `dist/`:
-- `dist/root_0.1.0-1_amd64.deb`
-- `dist/root-v0.1.0-x86_64-unknown-linux-gnu.tar.gz`
+- `dist/root_0.1.0-rc.1-1_amd64.deb`
+- `dist/root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz`
 - `dist/SHA256SUMS`
 
 Verify package integrity and contents:
 ```bash
-dpkg-deb -I dist/root_0.1.0-1_amd64.deb
-dpkg-deb -c dist/root_0.1.0-1_amd64.deb
-tar -ztvf dist/root-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
+dpkg-deb -I dist/root_0.1.0-rc.1-1_amd64.deb
+dpkg-deb -c dist/root_0.1.0-rc.1-1_amd64.deb
+tar -ztvf dist/root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz
 sha256sum -c dist/SHA256SUMS
 ```
 

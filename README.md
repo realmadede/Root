@@ -59,9 +59,9 @@ The Debian package installs both the headless CLI (`/usr/bin/root`) and native d
 sha256sum -c SHA256SUMS
 
 # Install via apt or dpkg
-sudo apt install ./dist/root_0.1.0-1_amd64.deb
+sudo apt install ./dist/root_0.1.0-rc.1-1_amd64.deb
 # or
-sudo dpkg -i dist/root_0.1.0-1_amd64.deb
+sudo dpkg -i dist/root_0.1.0-rc.1-1_amd64.deb
 ```
 
 ### Method 2: Portable Standalone Tarball (Unprivileged)
@@ -70,8 +70,8 @@ The portable distribution requires zero elevated privileges and can be installed
 
 ```bash
 # Unpack the archive
-tar -xzf dist/root-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
-cd root-v0.1.0-x86_64-unknown-linux-gnu
+tar -xzf dist/root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz
+cd root-v0.1.0-rc.1-x86_64-unknown-linux-gnu
 
 # Install to ~/.local
 ./install.sh --prefix ~/.local

@@ -52,9 +52,12 @@ where
     let cli = match Cli::try_parse_from(&args_vec) {
         Ok(c) => c,
         Err(e) => {
-            // Re-render clap error to stderr and return an InvalidPath/Parse error
-            eprintln!("{}", e);
-            return Err(RootError::InvalidPath(e.to_string()));
+            if e.use_stderr() {
+                return Err(RootError::InvalidPath(e.to_string()));
+            } else {
+                let _ = e.print();
+                return Ok(());
+            }
         }
     };
 

@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-VERSION="0.1.0"
+VERSION="0.1.0-rc.1"
 TARGET_TRIPLE="x86_64-unknown-linux-gnu"
 ARCHIVE_NAME="root-v${VERSION}-${TARGET_TRIPLE}"
 STAGE_DIR="${REPO_ROOT}/target/tarball/${ARCHIVE_NAME}"
@@ -56,6 +56,25 @@ cat <<'EOF' > "${STAGE_DIR}/install.sh"
 set -euo pipefail
 
 PREFIX="${PREFIX:-${HOME}/.local}"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --prefix)
+            PREFIX="$2"
+            shift 2
+            ;;
+        --prefix=*)
+            PREFIX="${1#*=}"
+            shift 1
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            echo "Usage: $0 [--prefix <dir>]" >&2
+            exit 1
+            ;;
+    esac
+done
+
 BIN_DIR="${PREFIX}/bin"
 DATA_DIR="${PREFIX}/share"
 
@@ -101,6 +120,25 @@ cat <<'EOF' > "${STAGE_DIR}/uninstall.sh"
 set -euo pipefail
 
 PREFIX="${PREFIX:-${HOME}/.local}"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --prefix)
+            PREFIX="$2"
+            shift 2
+            ;;
+        --prefix=*)
+            PREFIX="${1#*=}"
+            shift 1
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            echo "Usage: $0 [--prefix <dir>]" >&2
+            exit 1
+            ;;
+    esac
+done
+
 BIN_DIR="${PREFIX}/bin"
 DATA_DIR="${PREFIX}/share"
 
