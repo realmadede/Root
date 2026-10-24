@@ -44,6 +44,19 @@ impl NavigationItem {
         }
     }
 
+    /// Returns the descriptive subtitle for this view in the content header.
+    pub fn subtitle(&self) -> &'static str {
+        match self {
+            Self::Overview => "System Telemetry & Workstation Health",
+            Self::Resources => "Filesystem Resource Explorer",
+            Self::Agents => "Detected Coding Agents & Toolchains",
+            Self::Processes => "Unprivileged Workstation Process Survey",
+            Self::Activity => "Live Event Monitoring (Mode C)",
+            Self::Schedule => "Periodic Inspection Timers (Mode B)",
+            Self::Settings => "Application Preferences & Security Invariants",
+        }
+    }
+
     /// Returns the libadwaita/Freedesktop icon name.
     pub fn icon_name(&self) -> &'static str {
         match self {

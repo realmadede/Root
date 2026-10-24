@@ -699,10 +699,10 @@ fn test_25_memory_and_event_buffer_bounds() {
     assert!(resources.total_unfiltered_count() > resources.items().len());
 }
 
-// 26. Level B Native GTK component construction
+// 26. Level B Native GTK component construction and view stack navigation
 #[cfg(feature = "gtk")]
 #[test]
-fn test_26_native_gtk_component_construction() {
+fn test_26_native_gtk_component_construction_and_navigation() {
     use gtk4::prelude::*;
 
     if gtk4::init().is_err() {
@@ -712,6 +712,7 @@ fn test_26_native_gtk_component_construction() {
 
     let controller = RootAppController::new();
 
+    // 1. Build all seven views
     let overview_w = root_gui::gtk::views::build_overview_view(&controller.overview_vm);
     let resources_w = root_gui::gtk::views::build_resources_view(&controller.resources_vm);
     let agents_w = root_gui::gtk::views::build_agents_view(&controller.agents_vm);
@@ -727,6 +728,37 @@ fn test_26_native_gtk_component_construction() {
     assert!(activity_w.is_visible() || !activity_w.is_sensitive() || true);
     assert!(schedule_w.is_visible() || !schedule_w.is_sensitive() || true);
     assert!(settings_w.is_visible() || !settings_w.is_sensitive() || true);
+
+    // 2. Mount views in AdwViewStack and test navigation switching
+    let view_stack = libadwaita::ViewStack::new();
+
+    view_stack.add_named(&overview_w, Some(NavigationItem::Overview.page_id()));
+    view_stack.add_named(&resources_w, Some(NavigationItem::Resources.page_id()));
+    view_stack.add_named(&agents_w, Some(NavigationItem::Agents.page_id()));
+    view_stack.add_named(&processes_w, Some(NavigationItem::Processes.page_id()));
+    view_stack.add_named(&activity_w, Some(NavigationItem::Activity.page_id()));
+    view_stack.add_named(&schedule_w, Some(NavigationItem::Schedule.page_id()));
+    view_stack.add_named(&settings_w, Some(NavigationItem::Settings.page_id()));
+
+    // Verify initial visible child is Overview
+    assert_eq!(view_stack.visible_child_name().as_deref(), Some("overview"));
+
+    // Verify switching through all 7 destinations updates visible child
+    let destinations = [
+        ("overview", overview_w),
+        ("resources", resources_w),
+        ("agents", agents_w),
+        ("processes", processes_w),
+        ("activity", activity_w),
+        ("schedule", schedule_w),
+        ("settings", settings_w),
+    ];
+
+    for (page_id, widget) in destinations {
+        view_stack.set_visible_child_name(page_id);
+        assert_eq!(view_stack.visible_child_name().as_deref(), Some(page_id));
+        assert_eq!(view_stack.visible_child(), Some(widget));
+    }
 }
 
 // 27. Unicode and non-Latin character paths handling
@@ -798,4 +830,145 @@ fn test_27_unicode_path_presentation_and_filtering() {
 
     resources.set_search_query("");
     assert_eq!(resources.items().len(), 3);
+}
+
+// 28. Comprehensive navigation model verification
+#[test]
+fn test_28_navigation_model_comprehensive() {
+    let mut controller = RootAppController::new();
+
+    // Initial page is Overview
+    assert_eq!(
+        controller.state.navigation.current(),
+        NavigationItem::Overview
+    );
+
+    // Every navigation destination in ALL is selectable
+    for item in NavigationItem::ALL {
+        controller.navigate_to(item);
+        assert_eq!(controller.state.navigation.current(), item);
+        // Verify page changes do not trigger unexpected scans
+        assert_eq!(controller.state.scan_state, ScanExecutionState::Idle);
+    }
+
+    // Re-selecting current page does not corrupt state
+    controller.navigate_to(NavigationItem::Settings);
+    assert_eq!(
+        controller.state.navigation.current(),
+        NavigationItem::Settings
+    );
+    controller.navigate_to(NavigationItem::Settings);
+    assert_eq!(
+        controller.state.navigation.current(),
+        NavigationItem::Settings
+    );
+
+    // Rapid switching preserves consistency
+    let rapid_sequence = [
+        NavigationItem::Overview,
+        NavigationItem::Processes,
+        NavigationItem::Schedule,
+        NavigationItem::Resources,
+        NavigationItem::Settings,
+        NavigationItem::Agents,
+        NavigationItem::Activity,
+    ];
+    for &target in &rapid_sequence {
+        controller.navigate_to(target);
+        assert_eq!(controller.state.navigation.current(), target);
+    }
+
+    // Page identifier resolution and safe handling of unknown IDs
+    assert_eq!(
+        NavigationItem::from_page_id("overview"),
+        Some(NavigationItem::Overview)
+    );
+    assert_eq!(
+        NavigationItem::from_page_id("resources"),
+        Some(NavigationItem::Resources)
+    );
+    assert_eq!(
+        NavigationItem::from_page_id("agents"),
+        Some(NavigationItem::Agents)
+    );
+    assert_eq!(
+        NavigationItem::from_page_id("processes"),
+        Some(NavigationItem::Processes)
+    );
+    assert_eq!(
+        NavigationItem::from_page_id("activity"),
+        Some(NavigationItem::Activity)
+    );
+    assert_eq!(
+        NavigationItem::from_page_id("schedule"),
+        Some(NavigationItem::Schedule)
+    );
+    assert_eq!(
+        NavigationItem::from_page_id("settings"),
+        Some(NavigationItem::Settings)
+    );
+
+    // Invalid page identifiers fail safely by returning None
+    assert_eq!(NavigationItem::from_page_id("system"), None);
+    assert_eq!(NavigationItem::from_page_id("bogus"), None);
+    assert_eq!(NavigationItem::from_page_id(""), None);
+
+    // Subtitle descriptions for all 7 items exist and are descriptive
+    for item in NavigationItem::ALL {
+        assert!(!item.subtitle().is_empty());
+        assert!(!item.title().is_empty());
+        assert!(!item.icon_name().is_empty());
+        assert!(!item.accelerator().is_empty());
+    }
+}
+
+// 29. Navigation item metadata and accelerator contract
+#[test]
+fn test_29_navigation_item_metadata_and_accelerator_contract() {
+    use std::collections::HashSet;
+
+    let items = NavigationItem::ALL;
+    assert_eq!(items.len(), 7);
+
+    let mut page_ids = HashSet::new();
+    let mut titles = HashSet::new();
+    let mut accelerators = HashSet::new();
+    let mut subtitles = HashSet::new();
+
+    for item in items {
+        assert!(page_ids.insert(item.page_id()));
+        assert!(titles.insert(item.title()));
+        assert!(accelerators.insert(item.accelerator()));
+        assert!(subtitles.insert(item.subtitle()));
+    }
+
+    assert_eq!(page_ids.len(), 7);
+    assert_eq!(titles.len(), 7);
+    assert_eq!(accelerators.len(), 7);
+    assert_eq!(subtitles.len(), 7);
+}
+
+// 30. Settings page positioning and non-destructive contract
+#[test]
+fn test_30_settings_positioning_and_non_destructive_contract() {
+    let items = NavigationItem::ALL;
+    // Settings is the 7th destination (at index 6)
+    assert_eq!(items[6], NavigationItem::Settings);
+    assert_eq!(items[6].page_id(), "settings");
+
+    // Top primary navigation items are the first 6
+    let primary = &items[0..6];
+    assert_eq!(primary.len(), 6);
+    assert!(!primary.contains(&NavigationItem::Settings));
+
+    let mut controller = RootAppController::new();
+    controller.navigate_to(NavigationItem::Settings);
+    assert_eq!(
+        controller.state.navigation.current(),
+        NavigationItem::Settings
+    );
+
+    // Ensure settings navigation never mutates scan state or performs file operations
+    assert_eq!(controller.state.scan_state, ScanExecutionState::Idle);
+    assert!(controller.state.active_error.is_none());
 }
