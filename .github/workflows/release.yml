@@ -13,7 +13,7 @@ on:
       - 'v*.*.*'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,64 +27,88 @@ jobs:
   quality-gate:
     name: Release Quality Gate & Invariant Checks
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python runtime
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
       - name: Verify repository invariants
         run: python3 .github/scripts/check_invariants.py
 
+      - name: Verify tag matches workspace version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION="$(awk -F'"' '/^version = / {print $2; exit}' Cargo.toml)"
+          echo "Tag version:   ${TAG_VERSION}"
+          echo "Cargo version: ${CARGO_VERSION}"
+          if [[ "${TAG_VERSION}" != "${CARGO_VERSION}" ]]; then
+            echo "Error: Git tag '${TAG_VERSION}' does not match Cargo.toml version '${CARGO_VERSION}'." >&2
+            exit 1
+          fi
+
       - name: Install GTK4 and libadwaita dependencies
         run: sudo apt-get update && sudo apt-get install -y pkg-config libgtk-4-dev libadwaita-1-dev
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: rustfmt, clippy
 
       - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
 
       - name: Verify code formatting
         run: cargo fmt --check
 
       - name: Run clippy checks
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Run workspace tests
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --locked
 
       - name: Build documentation
-        run: cargo doc --workspace --no-deps
+        run: cargo doc --workspace --no-deps --locked
 
   package-linux:
     name: Linux Distribution Packaging (Debian & Tarball)
     needs: quality-gate
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Install GTK4 and libadwaita dependencies
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libgtk-4-dev libadwaita-1-dev dpkg-dev
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libgtk-4-dev libadwaita-1-dev dpkg-dev binutils
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
       - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
 
       - name: Build release binaries
         run: |
-          cargo build --release -p root-cli
-          cargo build --release -p root-gui --features gtk
+          cargo build --release --locked -p root-cli
+          cargo build --release --locked -p root-gui --features gtk
+
+      - name: Verify ELF dynamic linking and glibc compatibility
+        run: ./scripts/verify-glibc.sh --max-glibc 2.39
 
       - name: Build Debian package
         run: ./scripts/package-deb.sh
@@ -92,30 +116,71 @@ jobs:
       - name: Build portable Linux tarball
         run: ./scripts/package-tarball.sh
 
-      - name: Generate SHA-256 Checksums
+      - name: Generate and verify SHA-256 checksums
         run: ./scripts/generate-checksums.sh
 
+      - name: Smoke test Debian package inside clean Ubuntu 24.04 container
+        run: |
+          docker run --rm -v "${PWD}/dist:/dist:ro" ubuntu:24.04 bash -euxo pipefail -c '
+            dpkg --unpack /dist/root_*_amd64.deb
+            /usr/bin/root --version
+            /usr/bin/root doctor
+            ! ldd /usr/bin/root | grep -q "not found"
+          '
+
+      - name: Generate SLSA build provenance attestation
+        if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_draft == true)
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: |
+            dist/*.deb
+            dist/*.tar.gz
+            dist/SHA256SUMS
+
       - name: Upload Release Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: root-linux-artifacts
+          overwrite: true
+          if-no-files-found: error
           path: |
             dist/*.deb
             dist/*.tar.gz
             dist/SHA256SUMS
 
-      - name: Create Release Draft (Explicit Authorization Only)
-        if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_draft == true)
-        uses: softprops/action-gh-release@v2
+  publish-draft:
+    name: Create GitHub Release Draft (Explicit Authorization Only)
+    needs:
+      - quality-gate
+      - package-linux
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_draft == true)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified release artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: root-linux-artifacts
+          path: dist
+
+      - name: Verify downloaded artifact checksums before publication
+        run: |
+          cd dist
+          sha256sum -c SHA256SUMS
+
+      - name: Create Release Draft
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           draft: true
+          fail_on_unmatched_files: true
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
           files: |
             dist/*.deb
             dist/*.tar.gz
             dist/SHA256SUMS
           body: |
-            # Root v0.1.0-rc.1 — Deterministic Resource Inspection Utility
+            # Root ${{ github.ref_name }} — Deterministic Resource Inspection Utility
 
             Root is a deterministic, local-first system resource inspection utility engineered to help developers understand, audit, and safely inspect system resources accumulated through AI coding workflows.
 
@@ -123,3 +188,4 @@ jobs:
             - Production Read-Only Safety Mode (All mutations permanently rejected in production)
             - Unprivileged execution (zero root/sudo/privileged daemon requirements)
             - 100% deterministic local observation (zero AI runtimes, telemetry, or cloud calls)
+            - Verified ELF `VERNEED` glibc baseline (`GLIBC_2.39`, Ubuntu 24.04 LTS+ / Fedora 40+ / Kali / Arch)

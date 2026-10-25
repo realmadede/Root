@@ -42,17 +42,20 @@ Ensure that version strings match across all manifests:
 Execute the automated package builders:
 
 ```bash
-# 1. Build release binaries
-cargo build --release -p root-cli
-cargo build --release -p root-gui --features gtk
+# 1. Build release binaries with locked dependency graph
+cargo build --release --locked -p root-cli
+cargo build --release --locked -p root-gui --features gtk
 
-# 2. Build Debian package
+# 2. Verify ELF dynamic library isolation and glibc symbol compatibility
+./scripts/verify-glibc.sh
+
+# 3. Build Debian package (automatically synchronizes DEBIAN/control libc6 floor)
 ./scripts/package-deb.sh
 
-# 3. Build Portable Linux Tarball
+# 4. Build Portable Linux Tarball
 ./scripts/package-tarball.sh
 
-# 4. Generate SHA-256 Checksums
+# 5. Generate and self-verify SHA-256 Checksums
 ./scripts/generate-checksums.sh
 ```
 

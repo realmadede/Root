@@ -6,7 +6,7 @@ This report documents the formal verification gate for Root release candidate **
 
 The evaluation audited binary compatibility, verified live graphical application instantiation, executed Debian package lifecycle testing inside a clean disposable container, audited release workflow automation, and verified all quality and safety regressions.
 
-All 281 workspace tests pass, all 11 repository continuous assurance invariants pass, and production binaries remain strictly non-destructive and read-only.
+All 281 workspace tests pass, all 12 repository continuous assurance invariants pass, and production binaries remain strictly non-destructive and read-only.
 
 ---
 
@@ -20,9 +20,9 @@ All 281 workspace tests pass, all 11 repository continuous assurance invariants 
   - Cargo Workspace: `0.1.0-rc.1`
   - Debian Package: `0.1.0-rc.1-1`
   - Portable Tarball: `root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz`
-- **Working Tree**: Clean. Fresh distribution artifacts rebuilt from commit `a7d39ad`:
-  - `dist/root_0.1.0-rc.1-1_amd64.deb` (`SHA-256: 9a2efd63afe17377c27c5f2064c93cbcde7aa45a0ad9a3a50f7e0d0662439467`)
-  - `dist/root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz` (`SHA-256: 45c55eecb0bedb0bab1cfaecb0d606600661cf05b2c5a83ffd40303a4b969be8`)
+- **Working Tree**: Clean. Fresh distribution artifacts rebuilt and verified:
+  - `dist/root_0.1.0-rc.1-1_amd64.deb` (`SHA-256: ca00a10cf1c77e80404758eac9c4535d0d7a9dc9911e320026b932d007130b90`)
+  - `dist/root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz` (`SHA-256: d6c61ae7558168b321a042d5e1413fe7dc38b10664f2bfe0e8c5783308b6197e`)
   - `dist/SHA256SUMS`
 
 ---
@@ -49,7 +49,7 @@ Detailed inspection via `objdump -T` and `readelf -V` revealed:
 - **Empirical Compatibility Range**:
   - **Compatible Linux Systems (glibc >= 2.39)**: Ubuntu 24.04 LTS (glibc 2.39), Ubuntu 26.04 (glibc 2.40), Fedora 40+ (glibc 2.39/2.40), Arch Linux (glibc 2.40), Kali Linux Rolling (glibc 2.40).
   - **Incompatible Distribution Limitation**: Systems with glibc < 2.39 (specifically **Debian 12 Bookworm** with glibc 2.36, and **Ubuntu 22.04 LTS** with glibc 2.35) will encounter a dynamic linker rejection (`version 'GLIBC_2.39' not found`).
-  - **Control File Note**: While `data/debian/control` specifies `Depends: libc6 (>= 2.34)`, the ELF `VERNEED` entry effectively constrains this specific binary build to glibc 2.39+. Supporting Debian 12 Bookworm natively will require compiling inside a Debian 12 sysroot or container.
+  - **Control File Synchronization**: [`scripts/verify-glibc.sh`](file:///home/madede/BAGOMWA/PROJECTS/Root/scripts/verify-glibc.sh) audits both ELF binaries at package build time and dynamically injects the verified `VERNEED` floor (`Depends: libc6 (>= 2.39)`) into `DEBIAN/control` via [`scripts/package-deb.sh`](file:///home/madede/BAGOMWA/PROJECTS/Root/scripts/package-deb.sh). Supporting Debian 12 Bookworm natively requires compiling inside a Debian 12 sysroot or container.
 
 ---
 
@@ -92,28 +92,31 @@ The Debian package `dist/root_0.1.0-rc.1-1_amd64.deb` was evaluated inside a cle
 
 ## 5. Check 4: Release Workflow Audit
 
-The GitHub Actions release configuration ([`.github/workflows/release.yml`](file:///home/madede/BAGOMWA/PROJECTS/Root/.github/workflows/release.yml)) was audited against production release standards:
+The GitHub Actions release configuration ([`.github/workflows/release.yml`](file:///home/madede/BAGOMWA/PROJECTS/Root/.github/workflows/release.yml)) was audited and hardened against production supply-chain standards:
 
-1. **Triggers (`lines 3–14`)**:
+1. **Triggers (`lines 3–13`)**:
    - Manual execution: `workflow_dispatch` with input parameter `publish_draft` (default: `false`).
-   - Tag triggers: `push: tags: ['v*.*.*']`.
-2. **Draft Release Safety (`lines 108–112`)**:
-   - The release job explicitly enforces `draft: true`.
+   - Tag triggers: `push: tags: ['v*.*.*']`, with an automated pre-build check asserting that the Git tag matches the workspace version in `Cargo.toml`.
+2. **Draft Release Safety & Job Separation (`publish-draft` job)**:
+   - Artifact compilation (`package-linux`) is separated from publication (`publish-draft`).
+   - The publication job explicitly enforces `draft: true` and `fail_on_unmatched_files: true`, verifying `sha256sum -c SHA256SUMS` prior to uploading assets.
    - A tag push **never** publishes a release automatically. It creates an unpublished GitHub Release Draft that requires manual human sign-off in the GitHub web interface before public exposure.
-3. **Quality Gate Dependency (`line 69`)**:
-   - `package-linux` specifies `needs: quality-gate`.
-   - If any quality check fails (formatting, clippy, unit tests, invariant script, or doc generation), packaging is skipped entirely.
-4. **Least-Privilege Permissions (`lines 15–16`)**:
-   - Scoped strictly to `permissions: contents: write` to allow uploading release assets.
-5. **Action Pinning Audit**:
-   - Actions use major version tags: `actions/checkout@v4`, `actions/setup-python@v5`, `dtolnay/rust-toolchain@stable`, `Swatinem/rust-cache@v2`, `actions/upload-artifact@v4`, `softprops/action-gh-release@v2`.
-   - *Security Observation*: Tag pinning conforms to standard practice, though immutable commit SHA pinning is recommended for long-term supply-chain hardening.
+3. **Quality Gate & ELF glibc Gate Dependency**:
+   - `package-linux` specifies `needs: quality-gate` and executes `./scripts/verify-glibc.sh --max-glibc 2.39` plus a clean Ubuntu 24.04 container smoke test.
+   - All Cargo invocations enforce `--locked` against `Cargo.lock`.
+4. **Job-Scoped Least-Privilege Permissions**:
+   - Workflow default is `permissions: contents: read`.
+   - `quality-gate` runs strictly with `contents: read`.
+   - `package-linux` runs with `contents: read`, `id-token: write`, and `attestations: write` to generate cryptographic SLSA build provenance via `actions/attest-build-provenance`.
+   - Only `publish-draft` receives `contents: write`.
+5. **Immutable Commit SHA Action Pinning**:
+   - Every GitHub Action across all repository workflows (`.github/workflows/*.yml`) is pinned to its immutable 40-character Git commit SHA and continuously enforced by Invariant 12 in [`.github/scripts/check_invariants.py`](file:///home/madede/BAGOMWA/PROJECTS/Root/.github/scripts/check_invariants.py).
 
 ---
 
 ## 6. Check 5: Regression & Safety Gates
 
-All automated verification checks executed on commit `a7d39ad`:
+All automated verification checks executed:
 
 ```text
 cargo fmt --check:                                          PASSED (code 0)
@@ -122,7 +125,8 @@ cargo clippy --workspace --all-targets --all-features:      PASSED (code 0, zero
 cargo test --workspace --all-targets:                       PASSED (251 passed, 0 failed)
 cargo test --features gtk -p root-gui:                      PASSED (30 passed, 0 failed)
 cargo doc --workspace --no-deps:                            PASSED (code 0)
-python3 .github/scripts/check_invariants.py:                PASSED (11 of 11 invariants)
+./scripts/verify-glibc.sh:                                  PASSED (code 0, GLIBC_2.39 verified)
+python3 .github/scripts/check_invariants.py:                PASSED (12 of 12 invariants)
 ```
 
 ### Production Boundary Confirmation
