@@ -21,8 +21,8 @@ All 281 workspace tests pass, all 12 repository continuous assurance invariants 
   - Debian Package: `0.1.0-rc.1-1`
   - Portable Tarball: `root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz`
 - **Working Tree**: Clean. Fresh distribution artifacts rebuilt and verified:
-  - `dist/root_0.1.0-rc.1-1_amd64.deb` (`SHA-256: ca00a10cf1c77e80404758eac9c4535d0d7a9dc9911e320026b932d007130b90`)
-  - `dist/root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz` (`SHA-256: d6c61ae7558168b321a042d5e1413fe7dc38b10664f2bfe0e8c5783308b6197e`)
+  - `dist/root_0.1.0-rc.1-1_amd64.deb` (`SHA-256: 683e6413e6068d315986390ed6a714dc946fd35b6888a8023584c2d64bf36d25`)
+  - `dist/root-v0.1.0-rc.1-x86_64-unknown-linux-gnu.tar.gz` (`SHA-256: 7ab325de4b99e9dd721b458e0f0057d78462822aa3c2cbaf06c0559f855c4e99`)
   - `dist/SHA256SUMS`
 
 ---
