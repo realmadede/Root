@@ -24,11 +24,16 @@ echo "Source root:  ${REPO_ROOT}"
 # 1. Ensure release binaries are built
 if [[ ! -f "${REPO_ROOT}/target/release/root" ]] || [[ ! -f "${REPO_ROOT}/target/release/root-gui" ]]; then
     echo "Release binaries not found. Building release binaries..."
-    cargo build --release -p root-cli
-    cargo build --release -p root-gui --features gtk
+    cargo build --release --locked -p root-cli
+    cargo build --release --locked -p root-gui --features gtk
 fi
 
-# 2. Prepare clean staging hierarchy
+# 2. Verify ELF dynamic linking and extract exact glibc VERNEED baseline
+"${SCRIPT_DIR}/verify-glibc.sh"
+MIN_GLIBC="$("${SCRIPT_DIR}/verify-glibc.sh" --print-min-glibc)"
+echo "Verified ELF VERNEED minimum glibc requirement: libc6 (>= ${MIN_GLIBC})"
+
+# 3. Prepare clean staging hierarchy
 rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}/DEBIAN"
 mkdir -p "${BUILD_DIR}/usr/bin"
@@ -74,7 +79,7 @@ Priority: optional
 Architecture: ${ARCH}
 Installed-Size: ${INSTALLED_SIZE}
 Maintainer: Madede <bagomwaraphael@gmail.com>
-Depends: libc6 (>= 2.34), libadwaita-1-0 (>= 1.4), libgtk-4-1 (>= 4.12), libglib2.0-0t64 | libglib2.0-0 (>= 2.76)
+Depends: libc6 (>= ${MIN_GLIBC}), libadwaita-1-0 (>= 1.4), libgtk-4-1 (>= 4.12), libglib2.0-0t64 | libglib2.0-0 (>= 2.76)
 Homepage: https://github.com/realmadede/Root
 Description: Deterministic resource inspection utility for agentic coding workflows
  Root is a deterministic, local-first system resource inspection utility engineered

@@ -14,6 +14,7 @@ This script enforces repository-level invariants:
 9. Privileged service installation prohibition (user-level only).
 10. Strict Guardian authorization bypass prevention.
 11. Untracked repository hygiene.
+12. CI/CD workflow supply-chain security (immutable SHA action pinning and release draft gating).
 """
 
 import os
@@ -414,6 +415,47 @@ def check_untracked_hygiene() -> list[str]:
     return violations
 
 
+def check_workflow_supply_chain_security() -> list[str]:
+    """Verify CI/CD workflows use immutable 40-char commit SHAs and enforce release gates."""
+    violations = []
+    workflows_dir = ".github/workflows"
+    if not os.path.isdir(workflows_dir):
+        violations.append(f"Missing workflows directory: {workflows_dir}")
+        return violations
+
+    uses_pattern = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)")
+    sha_pin_pattern = re.compile(r"^[^@]+@[0-9a-f]{40}$")
+
+    for filename in sorted(os.listdir(workflows_dir)):
+        if not (filename.endswith(".yml") or filename.endswith(".yaml")):
+            continue
+        file_path = os.path.join(workflows_dir, filename)
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        for line_idx, line in enumerate(lines, start=1):
+            match = uses_pattern.match(line)
+            if match:
+                action_ref = match.group(1).strip("'\"")
+                if not sha_pin_pattern.match(action_ref):
+                    violations.append(
+                        f"{file_path}:{line_idx}: Unpinned GitHub Action '{action_ref}' (must use 40-char commit SHA)"
+                    )
+
+    release_workflow = os.path.join(workflows_dir, "release.yml")
+    if os.path.isfile(release_workflow):
+        with open(release_workflow, "r", encoding="utf-8") as f:
+            release_content = f.read()
+        if "draft: true" not in release_content:
+            violations.append(f"{release_workflow}: Release workflow must enforce 'draft: true'")
+        if "verify-glibc.sh" not in release_content:
+            violations.append(f"{release_workflow}: Release workflow must invoke 'scripts/verify-glibc.sh'")
+        if "attest-build-provenance" not in release_content:
+            violations.append(f"{release_workflow}: Release workflow must include SLSA build provenance attestation")
+
+    return violations
+
+
 def main() -> int:
     """Run all assurance checks and report status."""
     print("Executing Continuous Assurance invariant checks...")
@@ -513,13 +555,21 @@ def main() -> int:
     else:
         print("Untracked hygiene check: PASSED (Working tree clean of private files)")
 
+    # 12. CI/CD workflow supply-chain security
+    workflow_violations = check_workflow_supply_chain_security()
+    if workflow_violations:
+        all_violations.extend(workflow_violations)
+        print(f"Workflow supply-chain security check: FAILED ({len(workflow_violations)} violations found)")
+    else:
+        print("Workflow supply-chain security check: PASSED (Actions SHA-pinned and release gates enforced)")
+
     if all_violations:
         print("\nContinuous Assurance Violations:")
         for v in all_violations:
             print(f"  - {v}")
         return 1
 
-    print("\nAll 11 repository invariants verified successfully.")
+    print("\nAll 12 repository invariants verified successfully.")
     return 0
 
 

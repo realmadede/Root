@@ -20,9 +20,12 @@ echo "Source root:  ${REPO_ROOT}"
 # 1. Ensure release binaries are built
 if [[ ! -f "${REPO_ROOT}/target/release/root" ]] || [[ ! -f "${REPO_ROOT}/target/release/root-gui" ]]; then
     echo "Release binaries not found. Building release binaries..."
-    cargo build --release -p root-cli
-    cargo build --release -p root-gui --features gtk
+    cargo build --release --locked -p root-cli
+    cargo build --release --locked -p root-gui --features gtk
 fi
+
+# 2. Verify ELF dynamic linking and glibc compatibility
+"${SCRIPT_DIR}/verify-glibc.sh"
 
 # 2. Prepare staging tree
 rm -rf "${STAGE_DIR}"
