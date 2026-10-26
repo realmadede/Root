@@ -1,8 +1,10 @@
 use root_core::{
+    discovery::{DiscoveryFinding, LifecycleAssessment, RuleRegistry},
     error::{Result, RootError},
     model::{
-        FindingEvidence, FindingTarget, ProposedAction, ProtectionTier, ResourceCandidate,
-        ResourceCategory, ResourceId, ResourceLocation, ScanFinding, ScanReport, ScanSummary,
+        ConfidenceLevel, FindingEvidence, FindingTarget, ProposedAction, ProtectionTier,
+        ResourceCandidate, ResourceCategory, ResourceId, ResourceLocation, ScanFinding, ScanReport,
+        ScanSummary,
     },
 };
 use root_guardian::GuardianPolicy;
@@ -10,13 +12,14 @@ use root_platform::{
     traits::{EnvironmentProvider, ResourceAccountant},
     DiscoveredEntry, NativeAccountant, NativeEnvironment, NativeFilesystem, TraversalOptions,
 };
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 pub fn run_scan(
     target_path: Option<PathBuf>,
     _dry_run: bool,
     json_output: bool,
-    _interactive: bool,
+    interactive: bool,
 ) -> Result<()> {
     let env = NativeEnvironment::new();
     let fs = NativeFilesystem::new();
@@ -41,6 +44,8 @@ pub fn run_scan(
     let outcome = fs.traverse(&scan_root, &options)?;
 
     let mut findings = Vec::new();
+    let mut discovery_findings = Vec::new();
+    let mut seen_inodes = HashSet::new();
     let mut summary = ScanSummary {
         total_scanned: outcome.metrics.total_inspected,
         skipped_count: outcome.metrics.skipped_count,
@@ -52,8 +57,16 @@ pub fn run_scan(
         ..Default::default()
     };
 
-    for entry in outcome.entries {
-        classify_and_record_entry(&entry, current_uid, &policy, &mut findings, &mut summary);
+    for entry in &outcome.entries {
+        classify_and_record_entry(
+            entry,
+            current_uid,
+            &policy,
+            &mut findings,
+            &mut discovery_findings,
+            &mut summary,
+            &mut seen_inodes,
+        );
     }
 
     let report = ScanReport {
@@ -81,6 +94,9 @@ pub fn run_scan(
         println!("{}", json_str);
     } else {
         render_terminal_report(&scan_root, &report);
+        if interactive {
+            crate::interactive::run_interactive_browser(&discovery_findings);
+        }
     }
 
     Ok(())
@@ -91,25 +107,72 @@ fn classify_and_record_entry(
     current_uid: u32,
     policy: &GuardianPolicy,
     findings: &mut Vec<ScanFinding>,
+    discovery_findings: &mut Vec<DiscoveryFinding>,
     summary: &mut ScanSummary,
+    seen_inodes: &mut HashSet<(u64, u64)>,
 ) {
     let path_str = entry.path.to_string_lossy();
-    let (category, tier, action, explanation) =
-        classify_path(&path_str, entry.metadata.storage.bytes);
+    let matched_rule = RuleRegistry::match_path(&path_str);
+
+    let (target_id, target_name, target_kind, rule_id, category, tier, action, explanation) =
+        if let Some(rule) = matched_rule {
+            (
+                rule.target_id,
+                rule.target_id.name().to_string(),
+                rule.target_id.kind(),
+                rule.rule_id.clone(),
+                rule.category,
+                rule.default_tier,
+                rule.default_action,
+                format!(
+                    "Matched discovery rule '{}': {}",
+                    rule.rule_id, rule.pattern_description
+                ),
+            )
+        } else {
+            (
+                root_core::discovery::DiscoveryTargetId::Git,
+                "Unknown / General".to_string(),
+                root_core::discovery::TargetKind::Tool,
+                "default-unknown".to_string(),
+                ResourceCategory::Unknown,
+                ProtectionTier::NonActionable,
+                ProposedAction::Inspect,
+                "General filesystem entity; preserved in place".to_string(),
+            )
+        };
+
+    let is_new_inode = if entry.dev != 0 || entry.ino != 0 {
+        seen_inodes.insert((entry.dev, entry.ino))
+    } else {
+        true
+    };
+
+    let reclaimable_bytes = if is_new_inode {
+        if entry.metadata.storage.is_multi_link {
+            entry.metadata.storage.unique_bytes
+        } else if entry.metadata.storage.is_sparse && entry.metadata.storage.allocated_bytes > 0 {
+            entry.metadata.storage.allocated_bytes
+        } else {
+            entry.metadata.storage.bytes
+        }
+    } else {
+        0
+    };
 
     match tier {
         ProtectionTier::StrictlyProtected => summary.protected_count += 1,
         ProtectionTier::UserConfirmRequired => {
             summary.confirm_required_count += 1;
-            summary.reclaimable_storage_bytes += entry.metadata.storage.bytes;
+            summary.reclaimable_storage_bytes += reclaimable_bytes;
         }
         ProtectionTier::ObsoleteTransient => {
             summary.transient_count += 1;
-            summary.reclaimable_storage_bytes += entry.metadata.storage.bytes;
+            summary.reclaimable_storage_bytes += reclaimable_bytes;
         }
         ProtectionTier::SafeRecoverable => {
             summary.recoverable_count += 1;
-            summary.reclaimable_storage_bytes += entry.metadata.storage.bytes;
+            summary.reclaimable_storage_bytes += reclaimable_bytes;
         }
         ProtectionTier::NonActionable => summary.non_actionable_count += 1,
     }
@@ -119,7 +182,7 @@ fn classify_and_record_entry(
 
     let candidate = ResourceCandidate {
         id,
-        location,
+        location: location.clone(),
         category,
         metadata: entry.metadata.clone(),
         ownership: root_core::model::ResourceOwnership {
@@ -127,7 +190,7 @@ fn classify_and_record_entry(
             gid: entry.gid,
             is_current_user: entry.uid == current_uid,
         },
-        associated_agent: None,
+        associated_agent: Some(target_name.clone()),
     };
 
     let target = FindingTarget::Filesystem(candidate);
@@ -138,67 +201,32 @@ fn classify_and_record_entry(
         protection_tier: tier,
         proposed_action: action,
         evidence_list: vec![FindingEvidence::inspection(
-            "Filesystem metadata and lexical pattern match",
-            root_core::model::ConfidenceLevel::HighConfidence,
+            "Filesystem metadata and discovery rule match",
+            ConfidenceLevel::HighConfidence,
         )],
-        confidence: root_core::model::ConfidenceLevel::HighConfidence,
-        explanation,
-        safety_decision,
+        confidence: ConfidenceLevel::HighConfidence,
+        explanation: explanation.clone(),
+        safety_decision: safety_decision.clone(),
     };
 
-    findings.push(finding);
-}
+    discovery_findings.push(DiscoveryFinding {
+        target_id,
+        target_name,
+        target_kind,
+        rule_id,
+        location,
+        category,
+        metadata: entry.metadata.clone(),
+        protection_tier: tier,
+        proposed_action: action,
+        lifecycle: LifecycleAssessment::unknown("Direct filesystem scan"),
+        confidence: ConfidenceLevel::HighConfidence,
+        evidence_explanation: explanation,
+        safety_decision,
+        limitations: String::new(),
+    });
 
-fn classify_path(
-    path_str: &str,
-    _bytes: u64,
-) -> (ResourceCategory, ProtectionTier, ProposedAction, String) {
-    if path_str.contains("/.ssh")
-        || path_str.contains("/.gnupg")
-        || path_str.ends_with(".bashrc")
-        || path_str.ends_with("transcript.jsonl")
-        || path_str.ends_with("oauth_creds.json")
-        || path_str.ends_with(".key")
-    {
-        (
-            ResourceCategory::SessionState,
-            ProtectionTier::StrictlyProtected,
-            ProposedAction::Ignore,
-            "Protected credentials, user configuration, or conversation transcripts".to_string(),
-        )
-    } else if path_str.contains("/target/") || path_str.contains("/node_modules/") {
-        (
-            ResourceCategory::BuildArtifact,
-            ProtectionTier::UserConfirmRequired,
-            ProposedAction::Quarantine,
-            "Development build outputs / dependency vendor directory".to_string(),
-        )
-    } else if path_str.contains("/scratch/")
-        || path_str.contains("/log/")
-        || path_str.ends_with(".tmp")
-        || path_str.contains("session-env")
-    {
-        (
-            ResourceCategory::AgentScratchpad,
-            ProtectionTier::ObsoleteTransient,
-            ProposedAction::Quarantine,
-            "Transient diagnostic logs, agent scratchpads, or temporary files".to_string(),
-        )
-    } else if path_str.contains("cache") {
-        (
-            ResourceCategory::PackageCache,
-            ProtectionTier::SafeRecoverable,
-            ProposedAction::Quarantine,
-            "Package download cache; bit-for-bit re-fetchable from registries".to_string(),
-        )
-    } else {
-        (
-            ResourceCategory::Unknown,
-            ProtectionTier::NonActionable,
-            ProposedAction::Inspect,
-            "General filesystem entity; preserved in place".to_string(),
-        )
-    }
+    findings.push(finding);
 }
 
 fn render_terminal_report(root_path: &Path, report: &ScanReport) {

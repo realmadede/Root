@@ -6,7 +6,7 @@ use std::{
 use root_core::{
     discovery::{
         DiscoveryContext, DiscoveryEngine, DiscoveryFilter, DiscoveryTargetId, LifecycleState,
-        RuleRegistry, TargetKind,
+        ResourceClassifier, RuleRegistry, TargetKind,
     },
     fixtures::SyntheticFixture,
     model::{
@@ -661,4 +661,271 @@ fn test_discovery_rule_registry_invariants() {
             "Rules must have high or medium confidence"
         );
     }
+}
+
+#[test]
+fn test_phase13_rule_precedence_and_credential_protection() {
+    // 1. Antigravity presence lock must take precedence over general antigravity state
+    let presence_path = "/home/user/.gemini/antigravity-cli/presence/session_active.lock";
+    let matched = RuleRegistry::match_path(presence_path).expect("Presence lock must match a rule");
+    assert_eq!(matched.rule_id, "antigravity-presence");
+    assert_eq!(matched.default_tier, ProtectionTier::StrictlyProtected);
+
+    // 2. Dev server cache inside node_modules (.vite) must take precedence over node_modules
+    let vite_path = "/home/user/project/node_modules/.vite/deps/react.js";
+    let matched_vite = RuleRegistry::match_path(vite_path).expect("Vite cache must match a rule");
+    assert_eq!(matched_vite.rule_id, "dev-server-cache");
+    assert_eq!(matched_vite.default_tier, ProtectionTier::ObsoleteTransient);
+
+    // Standard node_modules still matches node-modules rule
+    let standard_nm = "/home/user/project/node_modules/lodash/index.js";
+    let matched_nm = RuleRegistry::match_path(standard_nm).expect("Node modules must match");
+    assert_eq!(matched_nm.rule_id, "node-modules");
+    assert_eq!(matched_nm.default_tier, ProtectionTier::UserConfirmRequired);
+
+    // 3. Cargo credentials must be strictly protected, never classified as cargo-cache
+    let cargo_creds = "/home/user/.cargo/credentials.toml";
+    let matched_creds =
+        RuleRegistry::match_path(cargo_creds).expect("Cargo credentials must match a rule");
+    assert_eq!(matched_creds.rule_id, "cargo-credentials");
+    assert_eq!(
+        matched_creds.default_tier,
+        ProtectionTier::StrictlyProtected
+    );
+
+    let cargo_config = "/home/user/.cargo/config.toml";
+    let matched_config =
+        RuleRegistry::match_path(cargo_config).expect("Cargo config must match a rule");
+    assert_eq!(matched_config.rule_id, "cargo-credentials");
+    assert_eq!(
+        matched_config.default_tier,
+        ProtectionTier::StrictlyProtected
+    );
+
+    // Cargo binaries must never match cargo-cache
+    let cargo_bin = "/home/user/.cargo/bin/cargo";
+    assert!(RuleRegistry::match_path(cargo_bin).is_none());
+
+    // Legitimate cargo cache matches cargo-cache
+    let cargo_crate = "/home/user/.cargo/registry/cache/crates.io-1234/serde-1.0.crate";
+    let matched_crate = RuleRegistry::match_path(cargo_crate).expect("Cargo cache must match");
+    assert_eq!(matched_crate.rule_id, "cargo-cache");
+    assert_eq!(matched_crate.default_tier, ProtectionTier::SafeRecoverable);
+
+    // 4. npm credentials (.npmrc) must be strictly protected
+    let npmrc_path = "/home/user/.npmrc";
+    let matched_npmrc = RuleRegistry::match_path(npmrc_path).expect("npmrc must match a rule");
+    assert_eq!(matched_npmrc.rule_id, "npm-credentials");
+    assert_eq!(
+        matched_npmrc.default_tier,
+        ProtectionTier::StrictlyProtected
+    );
+
+    // Arbitrary paths containing 'npm' must NOT match npm-cache
+    let non_npm_cache = "/home/user/my-project/src/npm/client.rs";
+    assert!(RuleRegistry::match_path(non_npm_cache).is_none());
+
+    // Legitimate npm cache matches npm-cache
+    let npm_cache_path = "/home/user/.npm/_cacache/content-v2/sha512/ab/cd";
+    let matched_npm_cache = RuleRegistry::match_path(npm_cache_path).expect("npm cache must match");
+    assert_eq!(matched_npm_cache.rule_id, "npm-cache");
+    assert_eq!(
+        matched_npm_cache.default_tier,
+        ProtectionTier::SafeRecoverable
+    );
+}
+
+fn make_test_meta(mtime: i64, bytes: u64, blocks: u64, nlink: u64) -> ResourceMetadata {
+    ResourceMetadata {
+        file_type: FileType::RegularFile,
+        storage: StorageMeasurement::from_raw(bytes, blocks, nlink),
+        permissions_mode: 0o644,
+        mtime_epoch_secs: mtime,
+        atime_epoch_secs: mtime,
+        ctime_epoch_secs: mtime,
+    }
+}
+
+#[test]
+fn test_phase13_lifecycle_refinements() {
+    let policy = GuardianPolicy::new();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    // 1. Presence lockfile is always Active even with no processes running
+    let presence_meta = make_test_meta(now - 3600 * 100, 0, 0, 1);
+    let finding_lock = ResourceClassifier::classify_entry(
+        std::path::Path::new("/home/user/.gemini/antigravity-cli/presence/session_active.lock"),
+        &presence_meta,
+        1,
+        1,
+        1000,
+        &[],
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    assert_eq!(finding_lock.lifecycle.state, LifecycleState::Active);
+
+    // 2. StrictlyProtected credentials are always Persistent, never Dormant
+    let creds_meta = make_test_meta(now - 3600 * 200, 100, 1, 1);
+    let finding_creds = ResourceClassifier::classify_entry(
+        std::path::Path::new("/home/user/.cargo/credentials.toml"),
+        &creds_meta,
+        1,
+        2,
+        1000,
+        &[],
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    assert_eq!(finding_creds.lifecycle.state, LifecycleState::Persistent);
+
+    // 3. Process directly targeting path via cmdline produces Active with direct operation reasoning
+    let target_path = std::path::Path::new("/home/user/project/target/debug/app");
+    let proc_direct = ProcessCandidate {
+        identity: ProcessIdentity {
+            pid: 9999,
+            ppid: 1,
+            real_uid: 1000,
+            name: "cargo".to_string(),
+            executable: Some(PathBuf::from("/usr/bin/cargo")),
+            cmdline: vec![
+                "cargo".to_string(),
+                "build".to_string(),
+                "--manifest-path".to_string(),
+                "/home/user/project/target/debug/app".to_string(),
+            ],
+            start_time_ticks: 1000,
+            tty_nr: 0,
+        },
+        state: ProcessState::Running,
+        memory: MemoryMeasurement::new(1000, None, None, None),
+        is_reparented_to_init: false,
+        is_abandoned: false,
+        associated_agent: None,
+    };
+    let meta_transient = make_test_meta(now - 3600 * 10, 1024, 2, 1);
+    let finding_direct = ResourceClassifier::classify_entry(
+        target_path,
+        &meta_transient,
+        1,
+        3,
+        1000,
+        &[proc_direct],
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    assert_eq!(finding_direct.lifecycle.state, LifecycleState::Active);
+    assert!(finding_direct
+        .lifecycle
+        .reasoning
+        .contains("actively operating on this path"));
+
+    // 4. Inconclusive 1h-48h window with no running process
+    let finding_indeterminate = ResourceClassifier::classify_entry(
+        target_path,
+        &meta_transient,
+        1,
+        4,
+        1000,
+        &[],
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    assert_eq!(
+        finding_indeterminate.lifecycle.state,
+        LifecycleState::Unknown
+    );
+    assert!(finding_indeterminate
+        .lifecycle
+        .reasoning
+        .contains("indeterminate window"));
+
+    // 5. Older than 48h with no running process -> DormantTransient
+    let meta_old = make_test_meta(now - 3600 * 72, 1024, 2, 1);
+    let finding_dormant = ResourceClassifier::classify_entry(
+        target_path,
+        &meta_old,
+        1,
+        5,
+        1000,
+        &[],
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    assert_eq!(
+        finding_dormant.lifecycle.state,
+        LifecycleState::DormantTransient
+    );
+}
+
+#[test]
+fn test_phase13_resource_accounting_accuracy() {
+    let policy = GuardianPolicy::new();
+    let capabilities = PlatformCapabilities::unknown();
+    let filter = DiscoveryFilter::default();
+
+    // Case 1: Multi-link file (hard link count 3) must contribute 0 unique bytes
+    let multi_link_meta = make_test_meta(1000, 10_000, 20, 3);
+    assert!(multi_link_meta.storage.is_multi_link);
+    assert_eq!(multi_link_meta.storage.unique_bytes, 0);
+
+    let entries_multi = vec![(
+        PathBuf::from("/home/user/project/target/debug/lib1.a"),
+        multi_link_meta,
+        1,
+        100,
+    )];
+    let ctx_multi = DiscoveryContext::new(
+        vec![PathBuf::from("/home/user/project")],
+        &filter,
+        1000,
+        &[],
+        capabilities.clone(),
+    );
+    let report_multi =
+        DiscoveryEngine::evaluate_findings(&entries_multi, &ctx_multi, &|t, tier, a, uid| {
+            policy.evaluate(t, tier, a, uid)
+        })
+        .expect("Evaluation failed");
+    assert_eq!(report_multi.summary.reclaimable_bytes_estimate, 0);
+
+    // Case 2: Sparse file (apparent bytes 10MB, allocated 4KB) must contribute physical allocated bytes
+    let sparse_meta = make_test_meta(1000, 10_485_760, 8, 1);
+    assert!(sparse_meta.storage.is_sparse);
+    assert_eq!(sparse_meta.storage.allocated_bytes, 4096);
+
+    let entries_sparse = vec![(
+        PathBuf::from("/home/user/project/target/debug/sparse.bin"),
+        sparse_meta,
+        1,
+        200,
+    )];
+    let report_sparse =
+        DiscoveryEngine::evaluate_findings(&entries_sparse, &ctx_multi, &|t, tier, a, uid| {
+            policy.evaluate(t, tier, a, uid)
+        })
+        .expect("Evaluation failed");
+    assert_eq!(report_sparse.summary.reclaimable_bytes_estimate, 4096);
+
+    // Case 3: Duplicate inode visited twice must be counted only once
+    let normal_meta = make_test_meta(1000, 5000, 10, 1);
+    let entries_dup = vec![
+        (
+            PathBuf::from("/home/user/project/target/debug/a.o"),
+            normal_meta.clone(),
+            1,
+            300,
+        ),
+        (
+            PathBuf::from("/home/user/project/target/debug/b.o"),
+            normal_meta,
+            1,
+            300,
+        ),
+    ];
+    let report_dup =
+        DiscoveryEngine::evaluate_findings(&entries_dup, &ctx_multi, &|t, tier, a, uid| {
+            policy.evaluate(t, tier, a, uid)
+        })
+        .expect("Evaluation failed");
+    assert_eq!(report_dup.summary.total_findings, 2);
+    assert_eq!(report_dup.summary.reclaimable_bytes_estimate, 5000);
 }

@@ -59,9 +59,9 @@ rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/root"
 rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/root"
 
 # Remove user-level scheduled inspection timers (if previously enabled)
-systemctl --user stop root-audit.timer 2>/dev/null || true
-systemctl --user disable root-audit.timer 2>/dev/null || true
-rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/root-audit.service"
-rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/root-audit.timer"
+systemctl --user stop root-inspect.timer 2>/dev/null || true
+systemctl --user disable root-inspect.timer 2>/dev/null || true
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/root-inspect.service"
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/root-inspect.timer"
 systemctl --user daemon-reload 2>/dev/null || true
 ```

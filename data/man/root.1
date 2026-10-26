@@ -38,7 +38,7 @@ Start live, rate-limited, read-only filesystem and process observation.
 \fBschedule\fR \fIstatus\fR|\fIenable\fR|\fIdisable\fR|\fIhistory\fR
 Manage unprivileged user-level scheduled inspection timers.
 .SH SAFETY INVARIANTS
-Root v1.0 operates exclusively in Read-Only Safety Mode. All destructive commands (clean, delete, quarantine, restore, prune) are permanently rejected by the Guardian security engine in production.
+Root v0.1.0-rc.1 operates exclusively in Read-Only Safety Mode. All destructive commands (clean, delete, quarantine, restore, prune) are permanently rejected by the Guardian security engine in production.
 .SH ENVIRONMENT
 .TP
 .B NO_COLOR

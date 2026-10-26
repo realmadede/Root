@@ -1,8 +1,10 @@
 use std::path::Path;
 
 use super::{
-    finding::DiscoveryFinding, lifecycle::LifecycleAssessment, rules::RuleRegistry,
-    target::DiscoveryTargetId,
+    finding::DiscoveryFinding,
+    lifecycle::LifecycleAssessment,
+    rules::RuleRegistry,
+    target::{DiscoveryTargetId, TargetKind},
 };
 use crate::model::{
     ConfidenceLevel, FindingTarget, ProcessCandidate, ProposedAction, ProtectionTier,
@@ -117,67 +119,18 @@ impl ResourceClassifier {
         category: ResourceCategory,
         active_processes: &[ProcessCandidate],
     ) -> LifecycleAssessment {
-        // 1. Check if associated agent or tool process is currently running
-        let running_proc = active_processes.iter().find(|p| match target_id {
-            DiscoveryTargetId::Antigravity => {
-                p.identity.name.contains("agy")
-                    || p.identity.name.contains("antigravity")
-                    || p.associated_agent.as_deref() == Some("Google Antigravity")
-            }
-            DiscoveryTargetId::ClaudeCode => {
-                p.identity.name.contains("claude")
-                    || p.associated_agent.as_deref() == Some("Claude Code")
-            }
-            DiscoveryTargetId::OpenAiCodex => {
-                p.identity.name.contains("codex") || p.identity.name.contains("openai")
-            }
-            DiscoveryTargetId::GeminiCli => p.identity.name.contains("gemini"),
-            DiscoveryTargetId::Aider => p.identity.name.contains("aider"),
-            DiscoveryTargetId::NodeNpm => {
-                p.identity.name.contains("npm") || p.identity.name.contains("node")
-            }
-            DiscoveryTargetId::Pnpm => p.identity.name.contains("pnpm"),
-            DiscoveryTargetId::RustCargo => {
-                p.identity.name.contains("cargo") || p.identity.name.contains("rustc")
-            }
-            DiscoveryTargetId::Python => p.identity.name.contains("python"),
-            DiscoveryTargetId::Git => p.identity.name.contains("git"),
-            DiscoveryTargetId::LanguageServers => {
-                p.identity.name.contains("rust-analyzer")
-                    || p.identity.name.contains("clangd")
-                    || p.identity.name.contains("tsserver")
-                    || p.identity.name.contains("pyright")
-                    || p.identity.name.contains("gopls")
-            }
-            DiscoveryTargetId::DevServers => {
-                p.identity.name.contains("vite")
-                    || p.identity.name.contains("next")
-                    || p.identity.name.contains("webpack")
-                    || p.identity.name.contains("uvicorn")
-                    || p.identity.name.contains("flask")
-            }
-        });
-
-        if let Some(proc) = running_proc {
-            return LifecycleAssessment::active(
-                format!(
-                    "Associated tool process '{}' (PID {}) is currently active",
-                    proc.identity.name, proc.identity.pid
-                ),
-                Some(proc.identity.pid),
-            );
-        }
-
-        // 2. Check for active presence markers on disk
+        // 1. Presence locks on disk guarantee active session status
         let path_str_normalized = path.to_string_lossy().replace('\\', "/");
-        if path_str_normalized.contains("presence/session_active.lock") {
+        if path_str_normalized.contains("presence/session_active.lock")
+            || path_str_normalized.ends_with("session_active.lock")
+        {
             return LifecycleAssessment::active(
-                "Active presence lockfile indicates running agent session".to_string(),
+                "Active presence lockfile indicates running agent session",
                 None,
             );
         }
 
-        // 2. Persistent credentials, history, and keys are permanent session records
+        // 2. Persistent credentials, history, and system records
         if tier == ProtectionTier::StrictlyProtected
             || category == ResourceCategory::SessionState
             || category == ResourceCategory::SystemFile
@@ -187,7 +140,46 @@ impl ResourceClassifier {
             );
         }
 
-        // 3. Transient scratchpads, logs, or build caches
+        // 3. Process correlation: check for processes directly referencing this path or active on system
+        let path_str = path.to_string_lossy();
+        let direct_proc = active_processes.iter().find(|p| {
+            process_matches_target(p, target_id)
+                && p.identity
+                    .cmdline
+                    .iter()
+                    .any(|arg| arg.contains(path_str.as_ref()))
+        });
+
+        if let Some(proc) = direct_proc {
+            return LifecycleAssessment::active(
+                format!(
+                    "Associated process '{}' (PID {}) is actively operating on this path",
+                    proc.identity.name, proc.identity.pid
+                ),
+                Some(proc.identity.pid),
+            );
+        }
+
+        let running_proc = active_processes
+            .iter()
+            .find(|p| process_matches_target(p, target_id));
+
+        if let Some(proc) = running_proc {
+            let label = if target_id.kind() == TargetKind::Agent {
+                format!(
+                    "Associated agent process '{}' (PID {}) is currently active on system",
+                    proc.identity.name, proc.identity.pid
+                )
+            } else {
+                format!(
+                    "Associated tool process '{}' (PID {}) is active on system (inferred activity)",
+                    proc.identity.name, proc.identity.pid
+                )
+            };
+            return LifecycleAssessment::active(label, Some(proc.identity.pid));
+        }
+
+        // 5. Transient scratchpads, logs, and build caches based on age
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
@@ -195,7 +187,6 @@ impl ResourceClassifier {
 
         let age_secs = now.saturating_sub(metadata.mtime_epoch_secs);
 
-        // If older than 48 hours and no process running: Dormant Transient
         if age_secs > 48 * 3600 {
             LifecycleAssessment::dormant_transient(
                 format!(
@@ -206,15 +197,57 @@ impl ResourceClassifier {
                 metadata.mtime_epoch_secs,
             )
         } else if age_secs < 3600 {
-            // Recent file (less than 1 hour old): may be active or mid-flight
             LifecycleAssessment::unknown(
                 "Resource modified within the last hour; cannot confirm session closure without live process telemetry",
             )
         } else {
-            // Indeterminate lifecycle
-            LifecycleAssessment::unknown(
-                "No active process detected, but lifecycle evidence remains inconclusive",
-            )
+            LifecycleAssessment::unknown(format!(
+                "No active {} process linked to path, and resource age ({}h) is within the 1h-48h indeterminate window",
+                target_id.name(),
+                age_secs / 3600
+            ))
+        }
+    }
+}
+
+fn process_matches_target(p: &ProcessCandidate, target_id: DiscoveryTargetId) -> bool {
+    match target_id {
+        DiscoveryTargetId::Antigravity => {
+            p.identity.name.contains("agy")
+                || p.identity.name.contains("antigravity")
+                || p.associated_agent.as_deref() == Some("Google Antigravity")
+        }
+        DiscoveryTargetId::ClaudeCode => {
+            p.identity.name.contains("claude")
+                || p.associated_agent.as_deref() == Some("Claude Code")
+        }
+        DiscoveryTargetId::OpenAiCodex => {
+            p.identity.name.contains("codex") || p.identity.name.contains("openai")
+        }
+        DiscoveryTargetId::GeminiCli => p.identity.name.contains("gemini"),
+        DiscoveryTargetId::Aider => p.identity.name.contains("aider"),
+        DiscoveryTargetId::NodeNpm => {
+            p.identity.name.contains("npm") || p.identity.name.contains("node")
+        }
+        DiscoveryTargetId::Pnpm => p.identity.name.contains("pnpm"),
+        DiscoveryTargetId::RustCargo => {
+            p.identity.name.contains("cargo") || p.identity.name.contains("rustc")
+        }
+        DiscoveryTargetId::Python => p.identity.name.contains("python"),
+        DiscoveryTargetId::Git => p.identity.name.contains("git"),
+        DiscoveryTargetId::LanguageServers => {
+            p.identity.name.contains("rust-analyzer")
+                || p.identity.name.contains("clangd")
+                || p.identity.name.contains("tsserver")
+                || p.identity.name.contains("pyright")
+                || p.identity.name.contains("gopls")
+        }
+        DiscoveryTargetId::DevServers => {
+            p.identity.name.contains("vite")
+                || p.identity.name.contains("next")
+                || p.identity.name.contains("webpack")
+                || p.identity.name.contains("uvicorn")
+                || p.identity.name.contains("flask")
         }
     }
 }

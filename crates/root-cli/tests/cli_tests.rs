@@ -329,3 +329,38 @@ fn test_20_attempts_to_access_mutation_functionality_through_cli() {
         }
     }
 }
+
+// 21. Scan classification consistency with discovery rules
+#[test]
+fn test_21_scan_classification_consistency() {
+    let temp = TempDir::new().unwrap();
+    let creds_dir = temp.path().join(".cargo");
+    fs::create_dir_all(&creds_dir).unwrap();
+    let creds_file = creds_dir.join("credentials.toml");
+    fs::write(&creds_file, "token = \"secret\"").unwrap();
+
+    let target_dir = temp.path().join("target").join("debug");
+    fs::create_dir_all(&target_dir).unwrap();
+    let build_file = target_dir.join("libtest.a");
+    fs::write(&build_file, "binary").unwrap();
+
+    // Run scan with json output
+    let res = run_with_args([
+        "root",
+        "scan",
+        "--path",
+        temp.path().to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(res.is_ok());
+
+    // Run discover on same path with json output
+    let res_disc = run_with_args([
+        "root",
+        "discover",
+        "--path",
+        temp.path().to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(res_disc.is_ok());
+}

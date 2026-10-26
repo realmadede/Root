@@ -59,6 +59,11 @@ pub fn build_activity_view(vm: &ActivityViewModel) -> gtk4::Widget {
         header_group.add(&deg_row);
     }
 
+    let cli_row = adw::ActionRow::new();
+    cli_row.set_title("CLI Activity Monitoring");
+    cli_row.set_subtitle("Start live monitoring: 'root monitor start' | Watch stream: 'root monitor watch' | Stop: 'root monitor stop'");
+    header_group.add(&cli_row);
+
     page.add(&header_group);
 
     let events_group = adw::PreferencesGroup::new();

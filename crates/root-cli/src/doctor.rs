@@ -109,7 +109,7 @@ pub fn run_doctor() -> Result<()> {
     }
 
     println!("\nActive Governance Phase:");
-    println!("  Phase Status     : Phase 10 (Cross-Platform Engine: macOS & Windows)");
+    println!("  Phase Status     : Phase 13 (Read-Only Hardening and Classification Safety)");
     println!(
         "  Safety Policy    : Production Read-Only (Deterministic Inspection; Mutation Disabled)"
     );

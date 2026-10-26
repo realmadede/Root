@@ -58,6 +58,11 @@ pub fn build_schedule_view(vm: &ScheduleViewModel) -> gtk4::Widget {
     );
     config_group.add(&budget_row);
 
+    let cli_row = adw::ActionRow::new();
+    cli_row.set_title("CLI Schedule Management");
+    cli_row.set_subtitle("Enable timer: 'root schedule enable' | Disable timer: 'root schedule disable' | Status: 'root schedule status'");
+    config_group.add(&cli_row);
+
     page.add(&config_group);
 
     let history_group = adw::PreferencesGroup::new();

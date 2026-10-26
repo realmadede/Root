@@ -58,7 +58,11 @@ impl DiscoveryRule {
             "antigravity-crashes" => {
                 path_str.contains("antigravity-cli/crashes/") && path_str.contains("crash_")
             }
-            "antigravity-presence" => path_str.contains("antigravity-cli/presence/"),
+            "antigravity-presence" => {
+                path_str.contains("antigravity-cli/presence/")
+                    || path_str.ends_with("antigravity-cli/presence")
+                    || path_str.ends_with("session_active.lock")
+            }
             "antigravity-state" => {
                 path_str.contains("/.gemini/antigravity")
                     || path_str.contains("/gemini/antigravity")
@@ -119,26 +123,17 @@ impl DiscoveryRule {
             }
             "aider-tags-cache" => path_str.ends_with(".aider.tags.cache.v3"),
 
-            // Development Tooling rules
-            "node-modules" => path_str.contains("/node_modules/"),
-            "npm-cache" => path_str.contains("/.npm/") || path_str.contains("/npm/"),
-            "pnpm-store" => {
-                path_str.contains("/.local/share/pnpm/store/")
-                    || path_str.contains("/local/share/pnpm/store/")
-                    || path_str.contains("/pnpm/store/")
-            }
-            "rust-target" => path_str.contains("/target/"),
-            "cargo-cache" => path_str.contains("/.cargo/") || path_str.contains("/cargo/"),
-            "python-bytecode" => path_str.contains("/__pycache__/") || path_str.ends_with(".pyc"),
-            "python-test-cache" => {
-                path_str.contains("/.pytest_cache/")
-                    || path_str.contains("/.mypy_cache/")
-                    || path_str.contains("/.ruff_cache/")
-            }
-            "python-venv" => path_str.contains("/.venv/") || path_str.contains("/venv/"),
-            "git-metadata" => path_str.contains("/.git/"),
-
             // Language Servers & Dev Servers
+            "dev-server-cache" => {
+                path_str.contains("/.next/cache/")
+                    || path_str.ends_with("/.next/cache")
+                    || path_str.contains("/.vite/")
+                    || path_str.ends_with("/.vite")
+                    || path_str.contains("/.parcel-cache/")
+                    || path_str.ends_with("/.parcel-cache")
+                    || path_str.contains("/.turbo/")
+                    || path_str.ends_with("/.turbo")
+            }
             "lsp-cache" => {
                 path_str.contains("/rust-analyzer/")
                     || path_str.contains("/clangd/")
@@ -146,12 +141,94 @@ impl DiscoveryRule {
                     || path_str.contains("/gopls/")
                     || path_str.contains("/tsserver/")
             }
-            "dev-server-cache" => {
-                path_str.contains("/.next/cache/")
-                    || path_str.contains("/.vite/")
-                    || path_str.contains("/.parcel-cache/")
-                    || path_str.contains("/.turbo/")
+
+            // Development Tooling rules
+            "npm-credentials" => {
+                path_str.ends_with("/.npmrc")
+                    || path_str == ".npmrc"
+                    || path_str.ends_with("/npmrc")
             }
+            "node-modules" => {
+                path_str.contains("/node_modules/") || path_str.ends_with("/node_modules")
+            }
+            "npm-cache" => {
+                if path_str.ends_with(".npmrc")
+                    || path_str.ends_with("package.json")
+                    || path_str.ends_with("package-lock.json")
+                {
+                    false
+                } else {
+                    path_str.contains("/.npm/_cacache/")
+                        || path_str.ends_with("/.npm/_cacache")
+                        || path_str.contains("/.npm/_logs/")
+                        || path_str.ends_with("/.npm/_logs")
+                        || path_str.contains("/.npm/")
+                        || path_str.ends_with("/.npm")
+                }
+            }
+            "pnpm-store" => {
+                path_str.contains("/.local/share/pnpm/store/")
+                    || path_str.contains("/local/share/pnpm/store/")
+                    || path_str.contains("/pnpm/store/")
+                    || path_str.ends_with("/pnpm/store")
+            }
+            "cargo-credentials" => {
+                (path_str.contains("/.cargo/") || path_str.contains("/cargo/"))
+                    && (path_str.ends_with("credentials.toml")
+                        || path_str.ends_with("credentials")
+                        || path_str.ends_with("config.toml"))
+            }
+            "cargo-cache" => {
+                if path_str.ends_with("credentials.toml")
+                    || path_str.ends_with("credentials")
+                    || path_str.ends_with("config.toml")
+                    || path_str.ends_with("config")
+                    || path_str.contains("/.cargo/bin/")
+                    || path_str.ends_with("/.cargo/bin")
+                    || path_str.contains("/cargo/bin/")
+                    || path_str.ends_with("/cargo/bin")
+                {
+                    false
+                } else {
+                    path_str.contains("/.cargo/registry/cache/")
+                        || path_str.ends_with("/.cargo/registry/cache")
+                        || path_str.contains("/.cargo/registry/src/")
+                        || path_str.ends_with("/.cargo/registry/src")
+                        || path_str.contains("/.cargo/git/db/")
+                        || path_str.ends_with("/.cargo/git/db")
+                        || path_str.contains("/.cargo/git/checkouts/")
+                        || path_str.ends_with("/.cargo/git/checkouts")
+                        || path_str.contains("/cargo/registry/cache/")
+                        || path_str.ends_with("/cargo/registry/cache")
+                        || path_str.contains("/cargo/registry/src/")
+                        || path_str.ends_with("/cargo/registry/src")
+                        || path_str.contains("/cargo/git/db/")
+                        || path_str.ends_with("/cargo/git/db")
+                        || path_str.contains("/cargo/git/checkouts/")
+                        || path_str.ends_with("/cargo/git/checkouts")
+                }
+            }
+            "rust-target" => path_str.contains("/target/") || path_str.ends_with("/target"),
+            "python-bytecode" => {
+                path_str.contains("/__pycache__/")
+                    || path_str.ends_with("/__pycache__")
+                    || path_str.ends_with(".pyc")
+            }
+            "python-test-cache" => {
+                path_str.contains("/.pytest_cache/")
+                    || path_str.ends_with("/.pytest_cache")
+                    || path_str.contains("/.mypy_cache/")
+                    || path_str.ends_with("/.mypy_cache")
+                    || path_str.contains("/.ruff_cache/")
+                    || path_str.ends_with("/.ruff_cache")
+            }
+            "python-venv" => {
+                path_str.contains("/.venv/")
+                    || path_str.ends_with("/.venv")
+                    || path_str.contains("/venv/")
+                    || path_str.ends_with("/venv")
+            }
+            "git-metadata" => path_str.contains("/.git/") || path_str.ends_with("/.git"),
 
             _ => false,
         }
@@ -271,21 +348,6 @@ impl RuleRegistry {
                 verified_versions: "Antigravity CLI 2.0+".into(),
             },
             DiscoveryRule {
-                rule_id: "antigravity-state".to_string(),
-                rule_version: 1,
-                target_id: DiscoveryTargetId::Antigravity,
-                supported_platforms: vec!["linux".into()],
-                nominal_base: "~/.gemini/antigravity/".into(),
-                pattern_description: "~/.gemini/antigravity*/**".into(),
-                category: ResourceCategory::AgentScratchpad,
-                default_tier: ProtectionTier::UserConfirmRequired,
-                default_action: ProposedAction::Inspect,
-                evidence_source: "General Google Antigravity ecosystem application state".into(),
-                confidence: ConfidenceLevel::MediumConfidence,
-                known_limitations: "Non-specific Antigravity state; requires explicit user review".into(),
-                verified_versions: "Antigravity CLI 2.0+".into(),
-            },
-            DiscoveryRule {
                 rule_id: "antigravity-presence".to_string(),
                 rule_version: 1,
                 target_id: DiscoveryTargetId::Antigravity,
@@ -298,6 +360,21 @@ impl RuleRegistry {
                 evidence_source: "Active agent presence marker indicating running session".into(),
                 confidence: ConfidenceLevel::HighConfidence,
                 known_limitations: "Protected active lockfile; never eligible for cleanup".into(),
+                verified_versions: "Antigravity CLI 2.0+".into(),
+            },
+            DiscoveryRule {
+                rule_id: "antigravity-state".to_string(),
+                rule_version: 1,
+                target_id: DiscoveryTargetId::Antigravity,
+                supported_platforms: vec!["linux".into()],
+                nominal_base: "~/.gemini/antigravity/".into(),
+                pattern_description: "~/.gemini/antigravity*/**".into(),
+                category: ResourceCategory::AgentScratchpad,
+                default_tier: ProtectionTier::UserConfirmRequired,
+                default_action: ProposedAction::Inspect,
+                evidence_source: "General Google Antigravity ecosystem application state".into(),
+                confidence: ConfidenceLevel::MediumConfidence,
+                known_limitations: "Non-specific Antigravity state; requires explicit user review".into(),
                 verified_versions: "Antigravity CLI 2.0+".into(),
             },
 
@@ -549,7 +626,37 @@ impl RuleRegistry {
                 verified_versions: "Aider v0.40+".into(),
             },
 
-            // 6. Development Tooling: Node.js, npm, pnpm
+            // 6. Development Tooling & Dev Servers
+            DiscoveryRule {
+                rule_id: "dev-server-cache".to_string(),
+                rule_version: 1,
+                target_id: DiscoveryTargetId::DevServers,
+                supported_platforms: vec!["linux".into()],
+                nominal_base: ".next/cache/ or node_modules/.vite/".into(),
+                pattern_description: "**/.next/cache/**, **/.vite/**, and **/.parcel-cache/**".into(),
+                category: ResourceCategory::BuildArtifact,
+                default_tier: ProtectionTier::ObsoleteTransient,
+                default_action: ProposedAction::Inspect,
+                evidence_source: "Frontend development server asset bundling and cache store".into(),
+                confidence: ConfidenceLevel::HighConfidence,
+                known_limitations: "Dev servers automatically recompile assets when cache is cleared".into(),
+                verified_versions: "Next.js, Vite, Webpack, Parcel".into(),
+            },
+            DiscoveryRule {
+                rule_id: "npm-credentials".to_string(),
+                rule_version: 1,
+                target_id: DiscoveryTargetId::NodeNpm,
+                supported_platforms: vec!["linux".into()],
+                nominal_base: "~/.npmrc".into(),
+                pattern_description: "~/.npmrc and project .npmrc".into(),
+                category: ResourceCategory::SessionState,
+                default_tier: ProtectionTier::StrictlyProtected,
+                default_action: ProposedAction::Ignore,
+                evidence_source: "npm user and project authentication configuration".into(),
+                confidence: ConfidenceLevel::HighConfidence,
+                known_limitations: "Stores npm registry authentication tokens; strictly protected".into(),
+                verified_versions: "npm all versions".into(),
+            },
             DiscoveryRule {
                 rule_id: "node-modules".to_string(),
                 rule_version: 1,
@@ -597,6 +704,21 @@ impl RuleRegistry {
             },
 
             // 7. Rust & Cargo
+            DiscoveryRule {
+                rule_id: "cargo-credentials".to_string(),
+                rule_version: 1,
+                target_id: DiscoveryTargetId::RustCargo,
+                supported_platforms: vec!["linux".into()],
+                nominal_base: "~/.cargo/credentials.toml".into(),
+                pattern_description: "~/.cargo/credentials.toml and ~/.cargo/config.toml".into(),
+                category: ResourceCategory::SessionState,
+                default_tier: ProtectionTier::StrictlyProtected,
+                default_action: ProposedAction::Ignore,
+                evidence_source: "Cargo credentials and API registry token storage".into(),
+                confidence: ConfidenceLevel::HighConfidence,
+                known_limitations: "Stores authentication tokens for crates.io; strictly protected".into(),
+                verified_versions: "Cargo all versions".into(),
+            },
             DiscoveryRule {
                 rule_id: "rust-target".to_string(),
                 rule_version: 1,
@@ -707,23 +829,6 @@ impl RuleRegistry {
                 confidence: ConfidenceLevel::HighConfidence,
                 known_limitations: "Rebuilt automatically upon next language server invocation".into(),
                 verified_versions: "rust-analyzer, clangd, pyright".into(),
-            },
-
-            // 11. Dev Servers
-            DiscoveryRule {
-                rule_id: "dev-server-cache".to_string(),
-                rule_version: 1,
-                target_id: DiscoveryTargetId::DevServers,
-                supported_platforms: vec!["linux".into()],
-                nominal_base: ".next/cache/ or node_modules/.vite/".into(),
-                pattern_description: "**/.next/cache/**, **/.vite/**, and **/.parcel-cache/**".into(),
-                category: ResourceCategory::BuildArtifact,
-                default_tier: ProtectionTier::ObsoleteTransient,
-                default_action: ProposedAction::Inspect,
-                evidence_source: "Frontend development server asset bundling and cache store".into(),
-                confidence: ConfidenceLevel::HighConfidence,
-                known_limitations: "Dev servers automatically recompile assets when cache is cleared".into(),
-                verified_versions: "Next.js, Vite, Webpack, Parcel".into(),
             },
         ]
     }

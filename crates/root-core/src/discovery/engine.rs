@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use super::{
@@ -79,6 +80,7 @@ impl DiscoveryEngine {
         policy: &dyn Fn(&FindingTarget, ProtectionTier, ProposedAction, u32) -> SafetyDecision,
     ) -> Result<DiscoveryReport> {
         let mut findings = Vec::new();
+        let mut seen_inodes = HashSet::new();
         let mut summary = DiscoverySummary {
             total_inspected: entries.len() as u64,
             skipped_count: ctx.skipped_count,
@@ -103,21 +105,41 @@ impl DiscoveryEngine {
                 continue;
             }
 
+            let is_new_inode = if *dev != 0 || *ino != 0 {
+                seen_inodes.insert((*dev, *ino))
+            } else {
+                true
+            };
+
+            let reclaimable_bytes = if is_new_inode {
+                if finding.metadata.storage.is_multi_link {
+                    finding.metadata.storage.unique_bytes
+                } else if finding.metadata.storage.is_sparse
+                    && finding.metadata.storage.allocated_bytes > 0
+                {
+                    finding.metadata.storage.allocated_bytes
+                } else {
+                    finding.metadata.storage.bytes
+                }
+            } else {
+                0
+            };
+
             // Tally metrics
             summary.total_findings += 1;
             match finding.protection_tier {
                 ProtectionTier::StrictlyProtected => summary.protected_count += 1,
                 ProtectionTier::UserConfirmRequired => {
                     summary.confirm_required_count += 1;
-                    summary.reclaimable_bytes_estimate += finding.metadata.storage.bytes;
+                    summary.reclaimable_bytes_estimate += reclaimable_bytes;
                 }
                 ProtectionTier::ObsoleteTransient => {
                     summary.transient_count += 1;
-                    summary.reclaimable_bytes_estimate += finding.metadata.storage.bytes;
+                    summary.reclaimable_bytes_estimate += reclaimable_bytes;
                 }
                 ProtectionTier::SafeRecoverable => {
                     summary.recoverable_count += 1;
-                    summary.reclaimable_bytes_estimate += finding.metadata.storage.bytes;
+                    summary.reclaimable_bytes_estimate += reclaimable_bytes;
                 }
                 ProtectionTier::NonActionable => summary.non_actionable_count += 1,
             }

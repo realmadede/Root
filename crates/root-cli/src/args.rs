@@ -26,9 +26,9 @@ pub enum Commands {
         json: bool,
     },
 
-    /// Scan and audit development resources and agent artifacts (Dry-Run mode)
+    /// Scan and audit development resources within a target directory (Production Read-Only)
     Scan {
-        /// Optional path to scan (defaults to isolated synthetic fixture tree if omitted)
+        /// Target directory path to scan (e.g. '--path /path/to/project')
         #[arg(short, long)]
         path: Option<PathBuf>,
 
@@ -47,7 +47,7 @@ pub enum Commands {
 
     /// Discover and classify resources created by AI coding agents and development tools
     Discover {
-        /// Optional root path to scan (defaults to detected agent paths or synthetic fixture)
+        /// Optional root path to scan (defaults to standard agent base locations when omitted)
         #[arg(short, long)]
         path: Option<PathBuf>,
 
