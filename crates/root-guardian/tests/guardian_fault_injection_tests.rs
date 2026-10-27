@@ -164,9 +164,9 @@ fn test_b01_source_replaced_before_auth() {
     let candidate = env.make_candidate(&file_path, ResourceCategory::BuildArtifact);
     let (req, _consent) = env.make_valid_request(&candidate, 60);
 
-    // Replace source file before authorization
-    fs::remove_file(&file_path).unwrap();
-    let _ = env.write_file("cache/source.bin", b"Replaced before auth");
+    // Replace source file before authorization using atomic rename to guarantee a distinct inode
+    let sub_path = env.write_file("cache/source_sub_b01.bin", b"Replaced before auth");
+    fs::rename(&sub_path, &file_path).unwrap();
 
     // Preflight revalidation must detect inode mismatch
     let res = TransactionEngine::quarantine(&env.sandbox, &mut env.journal, &req);
@@ -195,11 +195,11 @@ fn test_b02_source_replaced_after_auth() {
     let (req, _consent) = env.make_valid_request(&candidate, 60);
 
     let fp_clone = file_path.clone();
+    let sub_path = env.sandbox.root().join("cache/source_sub_b02.bin");
     let interceptor = FnInterceptor::new(move |point, _tx_id| {
         if point == FaultPoint::AfterAuthorization {
-            let _ = fs::remove_file(&fp_clone);
-            let mut f = File::create(&fp_clone).unwrap();
-            let _ = f.write_all(b"Replaced after auth");
+            fs::write(&sub_path, b"Replaced after auth").unwrap();
+            fs::rename(&sub_path, &fp_clone).unwrap();
         }
         InterceptDecision::Continue
     });
@@ -221,11 +221,11 @@ fn test_b03_source_replaced_after_preflight() {
     let (req, _consent) = env.make_valid_request(&candidate, 60);
 
     let fp_clone = file_path.clone();
+    let sub_path = env.sandbox.root().join("cache/source_sub_b03.bin");
     let interceptor = FnInterceptor::new(move |point, _tx_id| {
         if point == FaultPoint::AfterHashing {
-            let _ = fs::remove_file(&fp_clone);
-            let mut f = File::create(&fp_clone).unwrap();
-            let _ = f.write_all(b"Replaced after preflight");
+            fs::write(&sub_path, b"Replaced after preflight").unwrap();
+            fs::rename(&sub_path, &fp_clone).unwrap();
         }
         InterceptDecision::Continue
     });
@@ -247,11 +247,11 @@ fn test_b04_source_replaced_immediately_before_rename() {
     let (req, _consent) = env.make_valid_request(&candidate, 60);
 
     let fp_clone = file_path.clone();
+    let sub_path = env.sandbox.root().join("cache/source_sub_b04.bin");
     let interceptor = FnInterceptor::new(move |point, _tx_id| {
         if point == FaultPoint::ImmediatelyBeforeRename {
-            let _ = fs::remove_file(&fp_clone);
-            let mut f = File::create(&fp_clone).unwrap();
-            let _ = f.write_all(b"Replaced immediately before rename");
+            fs::write(&sub_path, b"Replaced immediately before rename").unwrap();
+            fs::rename(&sub_path, &fp_clone).unwrap();
         }
         InterceptDecision::Continue
     });
@@ -353,10 +353,11 @@ fn test_b08_source_replaced_with_another_file() {
 
     let fp_clone = file_path.clone();
     let dp_clone = decoy_path.clone();
+    let sub_path = env.sandbox.root().join("cache/source_sub_b08.bin");
     let interceptor = FnInterceptor::new(move |point, _tx_id| {
         if point == FaultPoint::ImmediatelyBeforeRename {
-            let _ = fs::remove_file(&fp_clone);
-            fs::copy(&dp_clone, &fp_clone).unwrap();
+            fs::copy(&dp_clone, &sub_path).unwrap();
+            fs::rename(&sub_path, &fp_clone).unwrap();
         }
         InterceptDecision::Continue
     });
@@ -1836,9 +1837,9 @@ fn test_f08_restored_src_recreated_by_unrelated_process() {
     env.journal.append(&rec3).unwrap();
     env.journal.append(&rec4).unwrap();
 
-    // Source replaced by unrelated file with different inode
-    fs::remove_file(&src).unwrap();
-    fs::write(&src, b"Recreated by compiler").unwrap();
+    // Source replaced by unrelated file with guaranteed distinct inode
+    let sub = env.write_file("sub_f08.txt", b"Recreated by compiler");
+    fs::rename(&sub, &src).unwrap();
 
     let report = JournalReconciler::reconcile_journal(&env.journal).unwrap();
     assert_eq!(report.count_recovery_required, 1);
@@ -1987,9 +1988,9 @@ fn test_f18_changed_object_identity_at_source() {
     let rec = create_sample_record("tx-f18", TransactionState::Prepared, &src, Some(&dest));
     env.journal.append(&rec).unwrap();
 
-    // Replace source with different file
-    fs::remove_file(&src).unwrap();
-    fs::write(&src, b"Different identity file").unwrap();
+    // Replace source with different file guaranteeing distinct inode
+    let sub = env.write_file("sub_f18.bin", b"Different identity file");
+    fs::rename(&sub, &src).unwrap();
 
     let report = JournalReconciler::reconcile_journal(&env.journal).unwrap();
     assert_eq!(report.count_uncertain, 1);

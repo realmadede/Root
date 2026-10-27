@@ -5,6 +5,8 @@ dist/
 *.bak
 *~
 .DS_Store
+__pycache__/
+*.pyc
 
 # Local development instruction files
 AGENTS.md
