@@ -6,14 +6,14 @@ use std::{
 use root_core::{
     discovery::{
         DiscoveryContext, DiscoveryEngine, DiscoveryFilter, DiscoveryTargetId, LifecycleState,
-        ResourceClassifier, RuleRegistry, TargetKind,
+        ProcessAttribution, ResourceClassifier, RuleRegistry, TargetKind,
     },
     fixtures::SyntheticFixture,
     model::{
-        ConfidenceLevel, FileType, FindingTarget, MemoryMeasurement, PlatformCapabilities,
-        ProcessCandidate, ProcessIdentity, ProcessState, ProposedAction, ProtectionTier,
-        RejectionReason, ResourceCandidate, ResourceId, ResourceMetadata, ResourceOwnership,
-        SafetyDecision, StorageMeasurement,
+        CapabilityStatus, ConfidenceLevel, FileType, FindingTarget, MemoryMeasurement,
+        PlatformCapabilities, ProcessCandidate, ProcessIdentity, ProcessState, ProposedAction,
+        ProtectionTier, RejectionReason, ResourceCandidate, ResourceId, ResourceMetadata,
+        ResourceOwnership, SafetyDecision, StorageMeasurement,
     },
 };
 use root_guardian::GuardianPolicy;
@@ -928,4 +928,343 @@ fn test_phase13_resource_accounting_accuracy() {
         .expect("Evaluation failed");
     assert_eq!(report_dup.summary.total_findings, 2);
     assert_eq!(report_dup.summary.reclaimable_bytes_estimate, 5000);
+}
+
+#[test]
+fn test_phase14_evidence_quality_and_process_attribution() {
+    let policy = GuardianPolicy::new();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    // 1. Direct path association in process cmdline yields Active with Direct attribution
+    let proc_direct = ProcessCandidate {
+        identity: ProcessIdentity {
+            pid: 5120,
+            ppid: 1,
+            real_uid: 1000,
+            name: "python3".to_string(),
+            executable: Some(PathBuf::from("/usr/bin/python3")),
+            cmdline: vec![
+                "python3".to_string(),
+                "/home/user/myproject/venv/bin/activate_this.py".to_string(),
+            ],
+            start_time_ticks: 1000,
+            tty_nr: 0,
+        },
+        state: ProcessState::Running,
+        memory: MemoryMeasurement::new(20_000_000, None, None, None),
+        is_reparented_to_init: false,
+        is_abandoned: false,
+        associated_agent: None,
+    };
+    let venv_meta = make_test_meta(now - 7200, 1024, 2, 1);
+    let finding_direct = ResourceClassifier::classify_entry(
+        Path::new("/home/user/myproject/venv"),
+        &venv_meta,
+        1,
+        101,
+        1000,
+        &[proc_direct],
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    assert_eq!(finding_direct.lifecycle.state, LifecycleState::Active);
+    assert_eq!(
+        finding_direct.lifecycle.attribution,
+        ProcessAttribution::Direct
+    );
+    assert_eq!(finding_direct.confidence, ConfidenceLevel::HighConfidence);
+    assert!(finding_direct
+        .lifecycle
+        .reasoning
+        .contains("actively operating on this path"));
+
+    // 2. Generic python runtime on host without path correlation must NOT mark unrelated venv as Active
+    let proc_generic_python = ProcessCandidate {
+        identity: ProcessIdentity {
+            pid: 7777,
+            ppid: 1,
+            real_uid: 1000,
+            name: "python3".to_string(),
+            executable: Some(PathBuf::from("/usr/bin/python3")),
+            cmdline: vec![
+                "python3".to_string(),
+                "/usr/share/unrelated/system_daemon.py".to_string(),
+            ],
+            start_time_ticks: 2000,
+            tty_nr: 0,
+        },
+        state: ProcessState::Running,
+        memory: MemoryMeasurement::new(15_000_000, None, None, None),
+        is_reparented_to_init: false,
+        is_abandoned: false,
+        associated_agent: None,
+    };
+    let finding_generic = ResourceClassifier::classify_entry(
+        Path::new("/home/user/other_project/.venv"),
+        &venv_meta,
+        1,
+        102,
+        1000,
+        &[proc_generic_python],
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    // Preserves uncertainty: generic runtime match is Inconclusive, never Active!
+    assert_eq!(finding_generic.lifecycle.state, LifecycleState::Unknown);
+    assert_eq!(
+        finding_generic.lifecycle.attribution,
+        ProcessAttribution::Inconclusive
+    );
+    assert!(finding_generic
+        .lifecycle
+        .reasoning
+        .contains("Generic runtime process 'python3'"));
+
+    // 3. Ambiguous substring match (e.g. argument "--target" must not match resource path "target")
+    let proc_flag = ProcessCandidate {
+        identity: ProcessIdentity {
+            pid: 8888,
+            ppid: 1,
+            real_uid: 1000,
+            name: "cargo".to_string(),
+            executable: Some(PathBuf::from("/usr/bin/cargo")),
+            cmdline: vec![
+                "cargo".to_string(),
+                "build".to_string(),
+                "--target".to_string(),
+                "x86_64-unknown-linux-gnu".to_string(),
+            ],
+            start_time_ticks: 3000,
+            tty_nr: 0,
+        },
+        state: ProcessState::Running,
+        memory: MemoryMeasurement::new(50_000_000, None, None, None),
+        is_reparented_to_init: false,
+        is_abandoned: false,
+        associated_agent: None,
+    };
+    // Testing path "target" against "--target" flag - must not match as a direct path argument!
+    let target_meta = make_test_meta(now - 7200, 4096, 8, 1);
+    let finding_flag = ResourceClassifier::classify_entry(
+        Path::new("/home/user/rust_project/target"),
+        &target_meta,
+        1,
+        103,
+        1000,
+        &[proc_flag],
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    // Since cmdline does not reference "/home/user/rust_project/target", it is Inferred, not Direct!
+    assert_eq!(finding_flag.lifecycle.state, LifecycleState::Active);
+    assert_eq!(
+        finding_flag.lifecycle.attribution,
+        ProcessAttribution::Inferred
+    );
+    assert_eq!(
+        finding_flag.lifecycle.confidence,
+        ConfidenceLevel::MediumConfidence
+    );
+
+    // 4. Inaccessible process telemetry preserves uncertainty (Unknown + Unavailable attribution)
+    let mut restricted_caps = PlatformCapabilities::unknown();
+    restricted_caps.process_enumeration = CapabilityStatus::PermissionRestricted;
+    let finding_restricted = ResourceClassifier::classify_entry_with_capabilities(
+        Path::new("/home/user/project/target/debug/app"),
+        &target_meta,
+        1,
+        104,
+        1000,
+        &[],
+        Some(&restricted_caps),
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    assert_eq!(finding_restricted.lifecycle.state, LifecycleState::Unknown);
+    assert_eq!(
+        finding_restricted.lifecycle.attribution,
+        ProcessAttribution::Unavailable
+    );
+    assert!(finding_restricted
+        .lifecycle
+        .reasoning
+        .contains("Process telemetry is inaccessible or restricted"));
+
+    // 5. Unrecognized resource (default-unknown) older than 48h must remain Unknown, never DormantTransient
+    let unknown_meta = make_test_meta(now - 3600 * 100, 2048, 4, 1);
+    let finding_unknown = ResourceClassifier::classify_entry(
+        Path::new("/home/user/unrecognized_directory_xyz/file.dat"),
+        &unknown_meta,
+        1,
+        105,
+        1000,
+        &[],
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    assert_eq!(finding_unknown.lifecycle.state, LifecycleState::Unknown);
+    assert_eq!(
+        finding_unknown.protection_tier,
+        ProtectionTier::NonActionable
+    );
+
+    // 6. Non-transient resource category (e.g. SessionState, UserDocument) older than 48h does not degrade to DormantTransient
+    let session_meta = make_test_meta(now - 3600 * 200, 4096, 8, 1);
+    let finding_session = ResourceClassifier::classify_entry(
+        Path::new("/home/user/.claude/sessions/session-1.json"),
+        &session_meta,
+        1,
+        106,
+        1000,
+        &[],
+        &|t, tier, a, uid| policy.evaluate(t, tier, a, uid),
+    );
+    assert_eq!(finding_session.lifecycle.state, LifecycleState::Persistent);
+}
+
+#[test]
+fn test_phase14_storage_accounting_integrity_and_hard_links() {
+    let policy = GuardianPolicy::new();
+    let capabilities = PlatformCapabilities::unknown();
+    let filter = DiscoveryFilter::default();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    // 1. Sparse file with 0 physical blocks allocated must contribute 0 bytes (not apparent size)
+    let hollow_sparse = make_test_meta(1000, 10_000_000, 0, 1);
+    assert!(hollow_sparse.storage.is_sparse);
+    assert_eq!(hollow_sparse.storage.allocated_bytes, 0);
+
+    let entries_hollow = vec![(
+        PathBuf::from("/home/user/project/target/debug/hollow.bin"),
+        hollow_sparse,
+        1,
+        501,
+    )];
+    let ctx = DiscoveryContext::new(
+        vec![PathBuf::from("/home/user/project")],
+        &filter,
+        1000,
+        &[],
+        capabilities.clone(),
+    );
+    let report_hollow =
+        DiscoveryEngine::evaluate_findings(&entries_hollow, &ctx, &|t, tier, a, uid| {
+            policy.evaluate(t, tier, a, uid)
+        })
+        .expect("Evaluation failed");
+    assert_eq!(report_hollow.summary.reclaimable_bytes_estimate, 0);
+
+    // 2. Multi-link file with 2 links where only ONE link is within scan boundary
+    // External link exists outside scan scope -> unlinking the candidate link frees 0 physical blocks
+    let multi_meta = make_test_meta(1000, 8192, 16, 2);
+    let entries_partial_multi = vec![(
+        PathBuf::from("/home/user/project/target/debug/link1.o"),
+        multi_meta.clone(),
+        1,
+        502,
+    )];
+    let report_partial =
+        DiscoveryEngine::evaluate_findings(&entries_partial_multi, &ctx, &|t, tier, a, uid| {
+            policy.evaluate(t, tier, a, uid)
+        })
+        .expect("Evaluation failed");
+    assert_eq!(report_partial.summary.reclaimable_bytes_estimate, 0);
+
+    // 3. Multi-link file where BOTH links are within scan boundary
+    // All 2 references accounted for in this scan -> unlinking all candidate references releases physical blocks
+    let entries_all_multi = vec![
+        (
+            PathBuf::from("/home/user/project/target/debug/link1.o"),
+            multi_meta.clone(),
+            1,
+            503,
+        ),
+        (
+            PathBuf::from("/home/user/project/target/debug/link2.o"),
+            multi_meta,
+            1,
+            503,
+        ),
+    ];
+    let report_all_multi =
+        DiscoveryEngine::evaluate_findings(&entries_all_multi, &ctx, &|t, tier, a, uid| {
+            policy.evaluate(t, tier, a, uid)
+        })
+        .expect("Evaluation failed");
+    assert_eq!(report_all_multi.summary.total_findings, 2);
+    // Contributed exactly once (8192 bytes, not double-counted as 16384)
+    assert_eq!(report_all_multi.summary.reclaimable_bytes_estimate, 8192);
+
+    // 4. Directory entry (4096 bytes dentry) must not be counted in candidate file storage estimate
+    let mut dir_meta = make_test_meta(1000, 4096, 8, 2);
+    dir_meta.file_type = FileType::Directory;
+    let file_meta = make_test_meta(1000, 2048, 4, 1);
+    let entries_dir_and_file = vec![
+        (
+            PathBuf::from("/home/user/project/target/debug"),
+            dir_meta,
+            1,
+            504,
+        ),
+        (
+            PathBuf::from("/home/user/project/target/debug/output.bin"),
+            file_meta,
+            1,
+            505,
+        ),
+    ];
+    let report_dir =
+        DiscoveryEngine::evaluate_findings(&entries_dir_and_file, &ctx, &|t, tier, a, uid| {
+            policy.evaluate(t, tier, a, uid)
+        })
+        .expect("Evaluation failed");
+    assert_eq!(report_dir.summary.total_findings, 2);
+    // Only the regular file (2048 bytes) is counted, directory table (4096) is excluded from candidate storage
+    assert_eq!(report_dir.summary.reclaimable_bytes_estimate, 2048);
+
+    // 5. Active resource (held by running process) must contribute 0 bytes to candidate storage estimate
+    let active_proc = ProcessCandidate {
+        identity: ProcessIdentity {
+            pid: 9191,
+            ppid: 1,
+            real_uid: 1000,
+            name: "cargo".to_string(),
+            executable: Some(PathBuf::from("/usr/bin/cargo")),
+            cmdline: vec![
+                "cargo".to_string(),
+                "build".to_string(),
+                "/home/user/project/target/debug/active.bin".to_string(),
+            ],
+            start_time_ticks: 1000,
+            tty_nr: 0,
+        },
+        state: ProcessState::Running,
+        memory: MemoryMeasurement::new(50_000_000, None, None, None),
+        is_reparented_to_init: false,
+        is_abandoned: false,
+        associated_agent: None,
+    };
+    let active_meta = make_test_meta(now - 100, 65536, 128, 1);
+    let entries_active = vec![(
+        PathBuf::from("/home/user/project/target/debug/active.bin"),
+        active_meta,
+        1,
+        506,
+    )];
+    let active_procs = [active_proc];
+    let ctx_active = DiscoveryContext::new(
+        vec![PathBuf::from("/home/user/project")],
+        &filter,
+        1000,
+        &active_procs,
+        capabilities,
+    );
+    let report_active =
+        DiscoveryEngine::evaluate_findings(&entries_active, &ctx_active, &|t, tier, a, uid| {
+            policy.evaluate(t, tier, a, uid)
+        })
+        .expect("Evaluation failed");
+    assert_eq!(report_active.summary.active_lifecycle_count, 1);
+    assert_eq!(report_active.summary.reclaimable_bytes_estimate, 0);
 }

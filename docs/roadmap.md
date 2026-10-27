@@ -32,6 +32,10 @@ gantt
     Phase 10 : Cross-Platform Expansion (macOS, Win)    :done, p10, 2027-08, 2027-09
     Phase 11 : Controlled Mutation Enablement           :done, p11, 2027-10, 2027-11
     Phase 12 : Hardening, Packaging & Distribution      :done, p12, 2027-12, 2027-12
+    section Assurance & Safety Hardening
+    Phase 13 : Read-Only Correctness & UX               :done, p13, 2028-01, 2028-01
+    Phase 14 : Evidence Quality & Resource Attribution  :done, p14, 2028-02, 2028-02
+    Phase 15 : Guardian Filesystem Safety & Assurance   :done, p15, 2028-03, 2028-03
 ```
 
 ---
@@ -247,3 +251,42 @@ gantt
   - Authored comprehensive Phase 12 documentation suite covering installation, uninstallation, release process, release plan, platform readiness, security review, validation report, and completion report.
   - Maintained zero-mutation production invariant: all 250 workspace tests pass cleanly and all 11 repository invariants pass with zero violations.
 - **Safety Gate**: Linux distribution packages validated; production mutation completely disabled; all 250 tests and 11 invariants pass; ready for release candidate review.
+
+---
+
+### Phase 13: Read-Only Correctness, Classification Safety, and User Experience — COMPLETED
+- **Status**: COMPLETE
+- **Primary Goal**: Audit production boundaries, eliminate silent fallback behavior, enforce command-line safety interception, and refine user experience.
+- **Key Accomplishments**:
+  - Implemented early command-line interception in `crates/root-cli/src/lib.rs` rejecting all mutation subcommands (`clean`, `quarantine`, `restore`, `delete`, `prune`) prior to argument parsing.
+  - Eliminated synthetic fixture fallback in `root scan`, mandating explicit target selection or native folder chooser dialogs.
+  - Hardened continuous assurance automation (`check_invariants.py`) to verify headless isolation, zero emojis, and release workflow supply-chain security.
+  - Authored comprehensive Phase 13 completion report (`docs/reports/phase-13-read-only-hardening.md`).
+- **Safety Gate**: Production mutation completely prohibited; 253 default workspace tests and 30 GTK tests pass; all 12 continuous assurance invariants pass.
+
+---
+
+### Phase 14: Evidence Quality, Resource Attribution, and Maintenance Readiness — COMPLETED
+- **Status**: COMPLETE
+- **Primary Goal**: Enhance evidence attribution, implement hardlink deduplicated storage accounting, provide explainable diagnostic provenance, and establish the maintenance readiness contract.
+- **Key Accomplishments**:
+  - Implemented multi-factor lifecycle assessment correlating timestamps, active processes, and presence markers.
+  - Implemented physical block versus logical byte accounting in `crates/root-core/src/model/measurement.rs` and `crates/root-cli/src/inspect.rs`, identifying sparse allocations and multi-link shared inodes (`st_nlink > 1`).
+  - Implemented explainability CLI command `root explain <identifier>` detailing rule ID, observed facts, lifecycle uncertainty, protection tiers, and Guardian policy evaluations.
+  - Formulated the formal Maintenance Safety Contract (`docs/maintenance-safety-contract.md`) defining explicit consent, candidate protection, and state preservation.
+  - Reconciled test suite baseline arithmetic in `docs/reports/phase-14-review-reconciliation.md`.
+- **Safety Gate**: Production inspection remains strictly read-only; storage accounting and explainability verified; 253 default workspace tests pass.
+
+---
+
+### Phase 15: Guardian Filesystem Safety Hardening & Continuous Assurance — COMPLETED
+- **Status**: COMPLETE / VALIDATED FOR RELEASE
+- **Primary Goal**: Harden Guardian transaction safety with descriptor pinning, framed journaling, durability, read-only crash reconciliation, adversarial fault injection, and final release validation.
+- **Key Accomplishments**:
+  - **Work Package 15.1**: Created `PinnedDirectory` and `PinnedFile` in `crates/root-platform/src/linux/descriptor.rs` using `openat2(RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS)` with single-component fallback. Added 19 descriptor tests.
+  - **Work Package 15.2**: Integrated pinned descriptors into `crates/root-guardian/src/engine.rs` with pre-mutation identity revalidation and consent expiration checks. Added 18 pipeline tests.
+  - **Work Package 15.3**: Created versioned framed recovery journal (`RecoveryJournal`) with CRC-32 integrity checking and write durability (`fsync`). Implemented read-only crash reconciler (`JournalReconciler`). Added 28 reconciliation tests.
+  - **Work Package 15.4**: Implemented synthetic fault injection framework (`FaultInterceptor`) in `crates/root-guardian/src/fault.rs`. Created 101 adversarial fault-injection tests.
+  - **Work Package 15.5**: Added post-mutation descriptor-pinned inode verification (`dest_dir.stat_child`) to detect unexpected inode substitution. Expanded early CLI interception to include `destroy`, `purge`, and `kill`. Created continuous assurance test framework (`.github/scripts/test_invariants.py`).
+  - **Release Validation & Evidence Reconciliation**: Executed full validation gate (`docs/reports/final-v0.1.0-rc.1-release-validation.md`) and evidence reconciliation audit (`docs/reports/final-v0.1.0-rc.1-evidence-reconciliation.md`). Confirmed dormant transaction engine unreachability, glibc 2.39 baseline, and clean packaging.
+- **Safety Gate**: Production mutation permanently disabled; 433 default workspace tests and 31 GTK tests (434 unique tests) pass; 4 assurance unit tests pass; 12 continuous assurance invariants verified; evaluated as `READY FOR SEPARATELY AUTHORIZED RELEASE`.

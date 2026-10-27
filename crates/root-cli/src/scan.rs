@@ -12,7 +12,7 @@ use root_platform::{
     traits::{EnvironmentProvider, ResourceAccountant},
     DiscoveredEntry, NativeAccountant, NativeEnvironment, NativeFilesystem, TraversalOptions,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 pub fn run_scan(
@@ -57,6 +57,15 @@ pub fn run_scan(
         ..Default::default()
     };
 
+    let mut observed_inodes = HashMap::new();
+    for entry in &outcome.entries {
+        if entry.dev != 0 || entry.ino != 0 {
+            *observed_inodes
+                .entry((entry.dev, entry.ino))
+                .or_insert(0usize) += 1;
+        }
+    }
+
     for entry in &outcome.entries {
         classify_and_record_entry(
             entry,
@@ -66,6 +75,7 @@ pub fn run_scan(
             &mut discovery_findings,
             &mut summary,
             &mut seen_inodes,
+            &observed_inodes,
         );
     }
 
@@ -102,6 +112,7 @@ pub fn run_scan(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn classify_and_record_entry(
     entry: &DiscoveredEntry,
     current_uid: u32,
@@ -110,6 +121,7 @@ fn classify_and_record_entry(
     discovery_findings: &mut Vec<DiscoveryFinding>,
     summary: &mut ScanSummary,
     seen_inodes: &mut HashSet<(u64, u64)>,
+    observed_inodes: &HashMap<(u64, u64), usize>,
 ) {
     let path_str = entry.path.to_string_lossy();
     let matched_rule = RuleRegistry::match_path(&path_str);
@@ -142,16 +154,39 @@ fn classify_and_record_entry(
             )
         };
 
+    let is_candidate_tier = matches!(
+        tier,
+        ProtectionTier::UserConfirmRequired
+            | ProtectionTier::ObsoleteTransient
+            | ProtectionTier::SafeRecoverable
+    );
+
+    let is_eligible_for_estimate = is_candidate_tier
+        && entry.metadata.file_type != root_core::model::FileType::Directory
+        && entry.metadata.file_type != root_core::model::FileType::Symlink;
+
     let is_new_inode = if entry.dev != 0 || entry.ino != 0 {
         seen_inodes.insert((entry.dev, entry.ino))
     } else {
         true
     };
 
-    let reclaimable_bytes = if is_new_inode {
+    let reclaimable_bytes = if is_eligible_for_estimate && is_new_inode {
         if entry.metadata.storage.is_multi_link {
-            entry.metadata.storage.unique_bytes
-        } else if entry.metadata.storage.is_sparse && entry.metadata.storage.allocated_bytes > 0 {
+            let observed_count = observed_inodes
+                .get(&(entry.dev, entry.ino))
+                .copied()
+                .unwrap_or(1);
+            if observed_count >= entry.metadata.storage.link_count as usize {
+                if entry.metadata.storage.is_sparse {
+                    entry.metadata.storage.allocated_bytes
+                } else {
+                    entry.metadata.storage.bytes
+                }
+            } else {
+                0
+            }
+        } else if entry.metadata.storage.is_sparse {
             entry.metadata.storage.allocated_bytes
         } else {
             entry.metadata.storage.bytes
@@ -314,7 +349,7 @@ fn render_terminal_report(root_path: &Path, report: &ScanReport) {
         report.summary.non_actionable_count
     );
     println!(
-        "  Potential Reclaimable Space : {:>10}",
+        "  Estimated Candidate Storage : {:>10} (Upper bound; subject to active session and link verification)",
         format_bytes(report.summary.reclaimable_storage_bytes)
     );
     println!(

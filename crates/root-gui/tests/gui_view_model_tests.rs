@@ -49,6 +49,7 @@ fn make_dummy_finding(
             reasoning: "Synthetic test finding".to_string(),
             associated_pid: None,
             last_activity_epoch_secs: Some(1700000000),
+            attribution: root_core::discovery::ProcessAttribution::None,
         },
         confidence: ConfidenceLevel::HighConfidence,
         evidence_explanation: "Test evidence explanation".to_string(),
@@ -971,4 +972,58 @@ fn test_30_settings_positioning_and_non_destructive_contract() {
     // Ensure settings navigation never mutates scan state or performs file operations
     assert_eq!(controller.state.scan_state, ScanExecutionState::Idle);
     assert!(controller.state.active_error.is_none());
+}
+
+// 31. Phase 14 resource attribution and storage view model
+#[test]
+fn test_31_phase14_resource_attribution_and_storage_view_model() {
+    let mut finding = make_dummy_finding(
+        "Antigravity",
+        "antigravity-scratch",
+        PathBuf::from("/home/user/project/target/debug/sparse.bin"),
+        10_000_000,
+        ProtectionTier::ObsoleteTransient,
+        LifecycleState::Active,
+    );
+    finding.metadata.storage.is_sparse = true;
+    finding.metadata.storage.allocated_bytes = 4096;
+    finding.lifecycle.attribution = root_core::discovery::ProcessAttribution::Direct;
+
+    let vm = ResourceItemViewModel::from_finding(&finding);
+    assert_eq!(
+        vm.lifecycle_attribution,
+        root_core::discovery::ProcessAttribution::Direct
+    );
+    assert_eq!(vm.lifecycle_attribution.display_badge(), "[DIRECT]");
+    assert!(vm
+        .provenance_facts
+        .iter()
+        .any(|f| f.contains("Process Attribution: [DIRECT]")));
+    assert!(vm
+        .provenance_facts
+        .iter()
+        .any(|f| f.contains("Sparse Allocation: 4096 physical bytes")));
+
+    // Verify multi-link representation
+    let mut multi_finding = make_dummy_finding(
+        "Cargo",
+        "cargo-target",
+        PathBuf::from("/home/user/project/target/debug/lib.a"),
+        8192,
+        ProtectionTier::ObsoleteTransient,
+        LifecycleState::DormantTransient,
+    );
+    multi_finding.metadata.storage.is_multi_link = true;
+    multi_finding.metadata.storage.link_count = 3;
+    multi_finding.lifecycle.attribution = root_core::discovery::ProcessAttribution::Inferred;
+
+    let multi_vm = ResourceItemViewModel::from_finding(&multi_finding);
+    assert_eq!(
+        multi_vm.lifecycle_attribution,
+        root_core::discovery::ProcessAttribution::Inferred
+    );
+    assert!(multi_vm
+        .provenance_facts
+        .iter()
+        .any(|f| f.contains("Hard Links: 3 directory references share this inode")));
 }

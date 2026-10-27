@@ -79,6 +79,43 @@ impl QuarantineStore {
         Ok(())
     }
 
+    /// Moves a synthetic candidate file atomically into the quarantine staging directory using pinned descriptors.
+    ///
+    /// Preserves file permissions and verifies that destination does not already exist via `RENAME_NOREPLACE`.
+    #[cfg(target_os = "linux")]
+    pub fn relocate_pinned(
+        source_parent_dir: &root_platform::PinnedDirectory,
+        source_filename: &str,
+        dest_dir: &root_platform::PinnedDirectory,
+        dest_filename: &str,
+        expected_dev: u64,
+        original_mode: u32,
+    ) -> Result<()> {
+        // 1. Verify filesystem boundary
+        if source_parent_dir.identity().device_id != expected_dev {
+            return Err(RootError::CrossDeviceUnsupported {
+                source_dev: source_parent_dir.identity().device_id,
+                dest_dev: expected_dev,
+            });
+        }
+        if dest_dir.identity().device_id != expected_dev {
+            return Err(RootError::CrossDeviceUnsupported {
+                source_dev: expected_dev,
+                dest_dev: dest_dir.identity().device_id,
+            });
+        }
+
+        // 2. Perform descriptor-pinned atomic rename
+        source_parent_dir
+            .rename_child_to(source_filename, dest_dir, dest_filename)
+            .map_err(RootError::from)?;
+
+        // 3. Preserve original permissions on the quarantined file descriptor directly
+        let _ = dest_dir.set_child_permissions_mode(dest_filename, original_mode);
+
+        Ok(())
+    }
+
     /// Verifies the integrity of a quarantined resource against pre-mutation snapshots.
     pub fn verify_quarantined_resource(
         dest_path: &Path,

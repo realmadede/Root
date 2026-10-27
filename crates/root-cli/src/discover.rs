@@ -280,7 +280,7 @@ fn render_discovery_terminal_report(scan_roots: &[PathBuf], report: &DiscoveryRe
         report.summary.recoverable_count
     );
     println!(
-        "  Speculative Reclaimable Space : {:>10} (Estimated upper bound; not guaranteed recoverable)",
+        "  Estimated Candidate Storage   : {:>10} (Estimated upper bound; not guaranteed recoverable)",
         format_bytes(report.summary.reclaimable_bytes_estimate)
     );
     println!(

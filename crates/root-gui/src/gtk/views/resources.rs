@@ -99,8 +99,11 @@ pub fn build_resources_view(vm: &ResourcesViewModel) -> gtk4::Widget {
             let row_widget = adw::ActionRow::new();
             row_widget.set_title(&format_path_middle(&row.path, 55));
             let sub = format!(
-                "{} | {:?} | Decision: {}",
-                row.category, row.lifecycle, row.guardian_decision
+                "{} | {:?} {} | Decision: {}",
+                row.category,
+                row.lifecycle,
+                row.lifecycle_attribution.display_badge(),
+                row.guardian_decision
             );
             row_widget.set_subtitle(&sub);
 

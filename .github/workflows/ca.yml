@@ -35,7 +35,9 @@ jobs:
           python-version: '3.12'
 
       - name: Verify repository invariants
-        run: python3 .github/scripts/check_invariants.py
+        run: |
+          python3 .github/scripts/test_invariants.py
+          python3 .github/scripts/check_invariants.py
 
   security-audit:
     name: Dependency Security Audit

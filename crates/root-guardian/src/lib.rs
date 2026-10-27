@@ -7,8 +7,10 @@
 //! CLI, GUI, scheduler, or monitor path on any platform constructs it.
 
 pub mod crypto;
+pub mod fault;
 pub mod journal;
 pub mod policy;
+pub mod reconciler;
 pub mod transaction;
 
 #[cfg(target_os = "linux")]
@@ -30,10 +32,17 @@ pub use authorization::{
 pub use crypto::{sha256_digest, sha256_file, sha256_hex};
 #[cfg(target_os = "linux")]
 pub use engine::TransactionEngine;
-pub use journal::{JournalRecord, RecoveryJournal};
+pub use fault::{
+    FaultInterceptor, FaultPoint, FnInterceptor, InterceptDecision, NoopInterceptor,
+    TargetCrashInterceptor, TargetFailInterceptor,
+};
+pub use journal::{JournalFault, JournalRecord, RecoveryJournal};
 pub use policy::GuardianPolicy;
 #[cfg(target_os = "linux")]
 pub use quarantine::QuarantineStore;
+pub use reconciler::{
+    JournalReconciler, ReconciliationOutcome, ReconciliationReport, TransactionReconciliation,
+};
 #[cfg(target_os = "linux")]
 pub use restoration::RestorationEngine;
 #[cfg(target_os = "linux")]

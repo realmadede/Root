@@ -8,6 +8,6 @@ pub mod target;
 pub use classifier::ResourceClassifier;
 pub use engine::{DiscoveryContext, DiscoveryEngine, DiscoveryFilter};
 pub use finding::{DiscoveryFinding, DiscoveryReport, DiscoverySummary};
-pub use lifecycle::{LifecycleAssessment, LifecycleState};
+pub use lifecycle::{LifecycleAssessment, LifecycleState, ProcessAttribution};
 pub use rules::{DiscoveryRule, RuleRegistry};
 pub use target::{DiscoveryTargetId, TargetKind};

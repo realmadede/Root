@@ -3,7 +3,7 @@ use crate::model::presentation::{
     LifecycleBadge, ProtectionBadge,
 };
 use crate::model::state::{ResourceFilter, ResourceSortField, SortDirection};
-use root_core::discovery::{DiscoveryFinding, LifecycleState};
+use root_core::discovery::{DiscoveryFinding, LifecycleState, ProcessAttribution};
 use root_core::model::ProtectionTier;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -19,6 +19,7 @@ pub struct ResourceItemViewModel {
     pub allocated_blocks: u64,
     pub protection_tier: ProtectionTier,
     pub lifecycle: LifecycleState,
+    pub lifecycle_attribution: ProcessAttribution,
     pub evidence_confidence: String,
     pub rule_id: String,
     pub provenance_facts: Vec<String>,
@@ -53,6 +54,23 @@ impl ResourceItemViewModel {
         ));
         facts.push(finding.evidence_explanation.clone());
 
+        facts.push(format!(
+            "Process Attribution: {}",
+            finding.lifecycle.attribution.display_badge()
+        ));
+        if is_sparse {
+            facts.push(format!(
+                "Sparse Allocation: {} physical bytes",
+                finding.metadata.storage.allocated_bytes
+            ));
+        }
+        if is_multi_link {
+            facts.push(format!(
+                "Hard Links: {} directory references share this inode",
+                finding.metadata.storage.link_count
+            ));
+        }
+
         let limitations = if finding.limitations.is_empty() {
             Vec::new()
         } else {
@@ -68,6 +86,7 @@ impl ResourceItemViewModel {
             allocated_blocks: finding.metadata.storage.allocated_bytes / 512,
             protection_tier: finding.protection_tier,
             lifecycle: finding.lifecycle.state,
+            lifecycle_attribution: finding.lifecycle.attribution,
             evidence_confidence: format!("{:?}", finding.confidence),
             rule_id: finding.rule_id.clone(),
             provenance_facts: facts,

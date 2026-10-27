@@ -448,4 +448,60 @@ impl AuthorizationEngine {
 
         Ok(())
     }
+
+    /// Revalidates filesystem identity descriptor-relatively immediately prior to physical rename.
+    ///
+    /// Validates that:
+    /// - `consent` (if provided) is not expired at `now_epoch_secs`.
+    /// - The child object stat relative to `parent_dir` is not a symlink and not a directory.
+    /// - Device and inode match expected values.
+    /// - Owner UID matches invoking UID.
+    /// - The child object can be opened descriptor-relatively as a regular file.
+    #[cfg(target_os = "linux")]
+    pub fn revalidate_pinned(
+        parent_dir: &root_platform::PinnedDirectory,
+        filename: &str,
+        expected_dev: u64,
+        expected_ino: u64,
+        expected_uid: u32,
+        consent: Option<&ConsentRecord>,
+        now_epoch_secs: i64,
+    ) -> Result<(), RejectionReason> {
+        // 1. Consent TTL validation
+        if let Some(c) = consent {
+            if !c.is_valid_at(now_epoch_secs) {
+                return Err(RejectionReason::ConsentExpired);
+            }
+        }
+
+        // 2. Descriptor-relative stat verification
+        let id = parent_dir
+            .stat_child(filename)
+            .map_err(|_| RejectionReason::InvalidPath)?;
+
+        if id.is_symlink() {
+            return Err(RejectionReason::SymlinkJailEscape);
+        }
+        if id.is_dir() || !id.is_regular_file() {
+            return Err(RejectionReason::FilesystemIdentityChanged);
+        }
+        if id.device_id != expected_dev || id.inode != expected_ino {
+            return Err(RejectionReason::FilesystemIdentityChanged);
+        }
+        if id.uid != expected_uid {
+            return Err(RejectionReason::OwnershipMismatch);
+        }
+
+        // 3. Descriptor-relative open verification (ensures regular file, no TOCTOU symlink injection)
+        let _pinned_file = parent_dir
+            .open_child_file(filename, 0, root_platform::ResolutionOptions::default())
+            .map_err(|e| match e {
+                root_platform::ResolutionError::SymlinkRejected(_) => {
+                    RejectionReason::SymlinkJailEscape
+                }
+                _ => RejectionReason::InvalidPath,
+            })?;
+
+        Ok(())
+    }
 }

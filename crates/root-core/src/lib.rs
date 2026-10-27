@@ -11,7 +11,7 @@ pub mod model;
 pub use discovery::{
     DiscoveryContext, DiscoveryEngine, DiscoveryFilter, DiscoveryFinding, DiscoveryReport,
     DiscoveryRule, DiscoverySummary, DiscoveryTargetId, LifecycleAssessment, LifecycleState,
-    ResourceClassifier, RuleRegistry, TargetKind,
+    ProcessAttribution, ResourceClassifier, RuleRegistry, TargetKind,
 };
 pub use error::{Result, RootError};
 pub use fixtures::SyntheticFixture;

@@ -24,11 +24,13 @@ cargo fmt --check
 cargo check --workspace --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --all-targets
+cargo test --features gtk -p root-gui
 cargo doc --workspace --no-deps
+python3 .github/scripts/test_invariants.py
 python3 .github/scripts/check_invariants.py
 ```
 
-All 250 workspace tests and 11 repository invariants must pass with zero warnings or errors.
+All 434 unique workspace tests, 4 assurance unit tests, and 12 continuous assurance invariants must pass with zero warnings or errors.
 
 ### Step 2: Version Consistency Audit
 Ensure that version strings match across all manifests:

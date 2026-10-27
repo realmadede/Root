@@ -22,9 +22,11 @@ pub mod posix;
 
 #[cfg(target_os = "linux")]
 pub use linux::{
-    InotifyWatcher, LinuxAccountant, LinuxEnvironment, LinuxFilesystem, LinuxMonitorSession,
-    LinuxProcess, LinuxScheduler, MemoryObserver, ProcessObserver, SystemdUnitGenerator,
-    ROOT_UNIT_MARKER,
+    is_openat2_supported, DirectoryIdentity, InotifyWatcher, LinuxAccountant, LinuxEnvironment,
+    LinuxFilesystem, LinuxMonitorSession, LinuxProcess, LinuxScheduler, MemoryObserver, OpenHow,
+    PinnedDirectory, PinnedFile, ProcessObserver, ResolutionError, ResolutionMode,
+    ResolutionOptions, SystemdUnitGenerator, RESOLVE_BENEATH, RESOLVE_CACHED, RESOLVE_IN_ROOT,
+    RESOLVE_NO_MAGICLINKS, RESOLVE_NO_SYMLINKS, RESOLVE_NO_XDEV, ROOT_UNIT_MARKER,
 };
 pub use lock::{AdvisoryLock, LockGuard, LockStatus};
 pub use mock::MockPlatform;

@@ -58,11 +58,11 @@ FORBIDDEN_TRACKED_PATTERNS = [
 ]
 
 PROHIBITED_CLI_SUBCOMMANDS = {
-    "clean", "delete", "purge", "quarantine", "destroy", "kill", "restore"
+    "clean", "delete", "purge", "quarantine", "destroy", "kill", "restore", "prune", "remediate"
 }
 
 PROHIBITED_CLI_FLAGS = {
-    "clean", "delete", "purge", "quarantine", "destroy", "kill", "restore"
+    "clean", "delete", "purge", "quarantine", "destroy", "kill", "restore", "prune", "remediate"
 }
 
 MUTATION_KEYWORD_PATTERNS = [
@@ -257,6 +257,9 @@ def check_no_mutation_from_monitor_or_scheduler() -> list[str]:
 
     prohibited_tokens = [
         "TransactionCoordinator",
+        "TransactionEngine",
+        "QuarantineStore",
+        "RestorationEngine",
         "RecoveryJournal",
         "ProposedAction::Quarantine",
         "ProposedAction::Prune"

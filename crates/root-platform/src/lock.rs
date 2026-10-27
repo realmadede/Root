@@ -73,6 +73,37 @@ impl AdvisoryLock {
             }),
         }
     }
+
+    /// Opens (creating if needed, owner-only on POSIX) and acquires an exclusive lock on `path`,
+    /// blocking until acquired.
+    pub fn acquire(path: &Path) -> Result<LockGuard> {
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                let _ = fs::create_dir_all(parent);
+            }
+        }
+        let file = options.open(path).map_err(|e| RootError::Io {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
+
+        lock_file_blocking(&file).map_err(|e| RootError::Io {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
+
+        Ok(LockGuard {
+            file,
+            path: path.to_path_buf(),
+        })
+    }
 }
 
 #[cfg(unix)]
@@ -89,6 +120,17 @@ fn try_lock_file(file: &File) -> io::Result<bool> {
         } else {
             Err(err)
         }
+    }
+}
+
+#[cfg(unix)]
+fn lock_file_blocking(file: &File) -> io::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    let ret = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+    if ret == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
     }
 }
 
@@ -131,6 +173,21 @@ fn try_lock_file(file: &File) -> io::Result<bool> {
 }
 
 #[cfg(windows)]
+fn lock_file_blocking(file: &File) -> io::Result<()> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{LockFileEx, LOCKFILE_EXCLUSIVE_LOCK};
+
+    let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+    let mut overlapped = unsafe { std::mem::zeroed() };
+    let ret = unsafe { LockFileEx(handle, LOCKFILE_EXCLUSIVE_LOCK, 0, 1, 0, &mut overlapped) };
+    if ret != 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(windows)]
 fn unlock_file(file: &File) {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Storage::FileSystem::UnlockFileEx;
@@ -143,6 +200,11 @@ fn unlock_file(file: &File) {
 #[cfg(not(any(unix, windows)))]
 fn try_lock_file(_file: &File) -> io::Result<bool> {
     Ok(true)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn lock_file_blocking(_file: &File) -> io::Result<()> {
+    Ok(())
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -172,6 +234,26 @@ mod tests {
         match AdvisoryLock::try_acquire(&path).unwrap() {
             LockStatus::Acquired(_g) => {}
             LockStatus::Contended => panic!("acquisition must succeed after drop"),
+        }
+    }
+
+    #[test]
+    fn blocking_acquire_succeeds_and_prevents_try_acquire() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("blocking.lock");
+
+        let guard = AdvisoryLock::acquire(&path).expect("blocking acquire should succeed");
+
+        match AdvisoryLock::try_acquire(&path).unwrap() {
+            LockStatus::Contended => {}
+            LockStatus::Acquired(_) => panic!("non-blocking acquire must be contended"),
+        }
+
+        drop(guard);
+
+        match AdvisoryLock::try_acquire(&path).unwrap() {
+            LockStatus::Acquired(_g) => {}
+            LockStatus::Contended => panic!("non-blocking acquire must succeed after release"),
         }
     }
 }

@@ -1,9 +1,9 @@
 use root_core::error::{Result, RootError};
+#[cfg(not(target_os = "linux"))]
 use root_platform::LinuxFilesystem;
-use std::{
-    fs,
-    os::unix::fs::{MetadataExt, PermissionsExt},
-};
+#[cfg(not(target_os = "linux"))]
+use std::os::unix::fs::PermissionsExt;
+use std::{fs, os::unix::fs::MetadataExt};
 
 use crate::{
     crypto::sha256_file,
@@ -22,6 +22,29 @@ impl RestorationEngine {
         journal: &mut RecoveryJournal,
         transaction_id: &str,
     ) -> Result<TransactionContext> {
+        Self::restore_resource_with_interceptor(
+            sandbox,
+            journal,
+            transaction_id,
+            &crate::fault::NoopInterceptor,
+        )
+    }
+
+    /// Restores a previously quarantined resource with deterministic fault interception.
+    pub fn restore_resource_with_interceptor<I: crate::fault::FaultInterceptor>(
+        sandbox: &FixtureSandbox,
+        journal: &mut RecoveryJournal,
+        transaction_id: &str,
+        interceptor: &I,
+    ) -> Result<TransactionContext> {
+        match interceptor
+            .on_fault_point(crate::fault::FaultPoint::BeforeRestoration, transaction_id)
+        {
+            crate::fault::InterceptDecision::Continue => {}
+            crate::fault::InterceptDecision::Fail(err) => return Err(err),
+            crate::fault::InterceptDecision::Crash(err) => return Err(err),
+        }
+
         // 1. Locate latest transaction record from journal
         let latest_record =
             journal
@@ -85,28 +108,78 @@ impl RestorationEngine {
         }
 
         // 5. Ensure parent directory exists
-        if let Some(parent) = original_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).map_err(|e| RootError::Io {
-                    path: parent.to_path_buf(),
-                    source: e,
-                })?;
-            }
+        let orig_parent = original_path.parent().ok_or_else(|| {
+            RootError::InvalidPath(format!("Original path '{:?}' has no parent", original_path))
+        })?;
+        let orig_filename = original_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| RootError::InvalidPath("Invalid original filename".into()))?;
+        let quarantine_filename = quarantine_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| RootError::InvalidPath("Invalid quarantine filename".into()))?;
+
+        if !orig_parent.exists() {
+            fs::create_dir_all(orig_parent).map_err(|e| RootError::Io {
+                path: orig_parent.to_path_buf(),
+                source: e,
+            })?;
         }
 
-        // 6. Perform atomic rename back to original path
+        // 6. Perform descriptor-pinned atomic rename back to original path
         let quat_meta = fs::symlink_metadata(quarantine_path).map_err(|e| RootError::Io {
             path: quarantine_path.clone(),
             source: e,
         })?;
 
-        LinuxFilesystem::atomic_rename_no_replace(quarantine_path, original_path)?;
+        match interceptor
+            .on_fault_point(crate::fault::FaultPoint::DuringRestoration, transaction_id)
+        {
+            crate::fault::InterceptDecision::Continue => {}
+            crate::fault::InterceptDecision::Fail(err) => return Err(err),
+            crate::fault::InterceptDecision::Crash(err) => return Err(err),
+        }
 
-        // 7. Restore permissions
-        let _ = fs::set_permissions(
-            original_path,
-            fs::Permissions::from_mode(quat_meta.mode() & 0o777),
-        );
+        #[cfg(target_os = "linux")]
+        {
+            let dest_parent_dir = root_platform::PinnedDirectory::open_root(orig_parent)?;
+            let quarantine_dir =
+                root_platform::PinnedDirectory::open_root(sandbox.quarantine_dir())?;
+
+            if dest_parent_dir.exists_child(orig_filename) {
+                return Err(RootError::RestorationConflict {
+                    path: original_path.clone(),
+                    reason: "Destination path is occupied by an existing file or directory".into(),
+                });
+            }
+
+            quarantine_dir
+                .rename_child_to(quarantine_filename, &dest_parent_dir, orig_filename)
+                .map_err(RootError::from)?;
+
+            // 7. Restore permissions
+            let _ =
+                dest_parent_dir.set_child_permissions_mode(orig_filename, quat_meta.mode() & 0o777);
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            LinuxFilesystem::atomic_rename_no_replace(quarantine_path, original_path)?;
+
+            // 7. Restore permissions
+            let _ = fs::set_permissions(
+                original_path,
+                fs::Permissions::from_mode(quat_meta.mode() & 0o777),
+            );
+        }
+
+        match interceptor.on_fault_point(crate::fault::FaultPoint::AfterRestoration, transaction_id)
+        {
+            crate::fault::InterceptDecision::Continue => {}
+            crate::fault::InterceptDecision::Fail(err) => return Err(err),
+            crate::fault::InterceptDecision::Crash(err) => return Err(err),
+        }
 
         // 8. Log restoration record to journal
         let now = std::time::SystemTime::now()

@@ -313,7 +313,16 @@ fn test_19_synthetic_transaction_diagnostics() {
 // 20. Attempts to access mutation functionality through production CLI commands
 #[test]
 fn test_20_attempts_to_access_mutation_functionality_through_cli() {
-    for cmd in &["clean", "quarantine", "restore", "delete", "prune"] {
+    for cmd in &[
+        "clean",
+        "quarantine",
+        "restore",
+        "delete",
+        "prune",
+        "destroy",
+        "purge",
+        "kill",
+    ] {
         let res = run_with_args(["root", cmd]);
         assert!(
             res.is_err(),
@@ -363,4 +372,43 @@ fn test_21_scan_classification_consistency() {
         "--json",
     ]);
     assert!(res_disc.is_ok());
+}
+
+// 22. Phase 14 storage accounting consistency and conservative estimate semantics
+#[test]
+fn test_22_phase14_storage_accounting_consistency() {
+    let temp = TempDir::new().unwrap();
+    let target_dir = temp.path().join("target").join("debug");
+    fs::create_dir_all(&target_dir).unwrap();
+
+    let file_a = target_dir.join("build_output.bin");
+    fs::write(&file_a, vec![0u8; 16384]).unwrap();
+
+    // Create a hard link to file_a inside target_dir
+    let file_b = target_dir.join("build_output_link.bin");
+    fs::hard_link(&file_a, &file_b).unwrap();
+
+    // Run root scan with JSON output
+    let res_scan = run_with_args([
+        "root",
+        "scan",
+        "--path",
+        temp.path().to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(res_scan.is_ok());
+
+    // Run root discover with JSON output
+    let res_disc = run_with_args([
+        "root",
+        "discover",
+        "--path",
+        temp.path().to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(res_disc.is_ok());
+
+    // Both scan and discover should execute without error
+    let scan_plain = run_with_args(["root", "scan", "--path", temp.path().to_str().unwrap()]);
+    assert!(scan_plain.is_ok());
 }

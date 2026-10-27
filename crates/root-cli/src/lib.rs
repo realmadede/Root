@@ -39,6 +39,9 @@ where
             || sub == "restore"
             || sub == "delete"
             || sub == "prune"
+            || sub == "destroy"
+            || sub == "purge"
+            || sub == "kill"
         {
             return Err(RootError::PolicyViolation {
                 reason: format!(

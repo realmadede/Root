@@ -35,7 +35,7 @@ impl StorageMeasurement {
     pub fn from_raw(bytes: u64, allocated_blocks: u64, link_count: u64) -> Self {
         // Standard Linux block size in stat is 512 bytes (POSIX standard for st_blocks)
         let allocated_bytes = allocated_blocks * 512;
-        let is_sparse = bytes > allocated_bytes && allocated_bytes > 0;
+        let is_sparse = bytes > allocated_bytes;
         let is_multi_link = link_count > 1;
         let (shared_bytes, unique_bytes) = if is_multi_link {
             (bytes, 0)

@@ -16,8 +16,9 @@ use root_core::{
     },
 };
 use root_guardian::{
-    crypto::sha256_file, AuthorizationEngine, AuthorizationRequest, FixtureSandbox, JournalRecord,
-    RecoveryJournal, TransactionContext, TransactionEngine, TransactionState,
+    crypto::sha256_file, AuthorizationEngine, AuthorizationRequest, ConsentRecord, FixtureSandbox,
+    JournalRecord, RecoveryJournal, RestorationEngine, TransactionContext, TransactionEngine,
+    TransactionState,
 };
 
 struct TestEnv {
@@ -597,5 +598,105 @@ fn test_16_sandbox_escape_attempts_rejection() {
     assert!(
         matches!(res, Err(RootError::SandboxViolation { .. })),
         "Path outside sandbox must yield SandboxViolation"
+    );
+}
+
+#[test]
+fn test_17_expired_consent_transaction_rejection_and_journal_failure() {
+    let mut env = TestEnv::new();
+    let file = env.write_file("expired_tx_target.dat", b"sensitive data");
+    let candidate = env.make_candidate(&file, ResourceCategory::BuildArtifact);
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let expired_consent = ConsentRecord::with_explicit_time(
+        candidate.id.clone(),
+        ProposedAction::Quarantine,
+        file.clone(),
+        "expired-nonce-999".into(),
+        now - 120,
+        60, // 60s TTL; expired 60 seconds ago
+    );
+
+    let request = AuthorizationRequest::new(
+        candidate,
+        ProposedAction::Quarantine,
+        ProtectionTier::UserConfirmRequired,
+        env.sandbox.operator_uid(),
+    )
+    .with_consent(expired_consent)
+    .with_sandbox_root(env.sandbox.root().to_path_buf());
+
+    let res = TransactionEngine::quarantine(&env.sandbox, &mut env.journal, &request);
+
+    // 1. Transaction must be rejected with PolicyViolation
+    assert!(
+        matches!(res, Err(RootError::PolicyViolation { .. })),
+        "Quarantine with expired consent must fail with PolicyViolation"
+    );
+
+    // 2. Source file must remain untouched
+    assert!(
+        file.exists(),
+        "Target file must not be modified or moved when consent has expired"
+    );
+    assert_eq!(fs::read(&file).unwrap(), b"sensitive data");
+
+    // 3. Journal must record the failure with ConsentExpired explanation
+    let records = env.journal.read_all().expect("Read journal");
+    assert!(
+        !records.is_empty(),
+        "Journal must record failed transaction"
+    );
+    let last = records.last().unwrap();
+    assert_eq!(last.state, TransactionState::Failed);
+    assert!(
+        last.failure_reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("expired"),
+        "Journal failure reason must explain consent expiration"
+    );
+}
+
+#[test]
+fn test_18_restoration_refuses_non_quarantined_or_unregistered_transaction() {
+    let mut env = TestEnv::new();
+
+    // 1. Unregistered transaction ID must fail with TransactionFailed
+    let unregistered_res =
+        RestorationEngine::restore_resource(&env.sandbox, &mut env.journal, "tx_nonexistent_9999");
+    assert!(
+        matches!(unregistered_res, Err(RootError::TransactionFailed { .. })),
+        "Restoring unknown transaction ID must yield TransactionFailed"
+    );
+
+    // 2. Transaction that ended in Failed state must refuse restoration with InvalidStateTransition
+    let failed_record = JournalRecord {
+        transaction_id: "tx_aborted_1111".into(),
+        timestamp_epoch_secs: 1000,
+        state: TransactionState::Failed,
+        original_path: env.sandbox.root().join("some_file.dat"),
+        quarantine_path: None,
+        device_id: env.sandbox.device_id(),
+        inode: 99999,
+        size_bytes: 100,
+        sha256: None,
+        reason: "Aborted prior to move".into(),
+        failure_reason: Some("ConsentExpired".into()),
+    };
+    env.journal.append(&failed_record).expect("Append record");
+
+    let restore_failed_res =
+        RestorationEngine::restore_resource(&env.sandbox, &mut env.journal, "tx_aborted_1111");
+    assert!(
+        matches!(
+            restore_failed_res,
+            Err(RootError::InvalidStateTransition { .. })
+        ),
+        "Restoring a Failed transaction must be rejected as an InvalidStateTransition"
     );
 }

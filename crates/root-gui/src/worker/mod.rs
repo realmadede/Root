@@ -174,11 +174,7 @@ impl InspectionWorker {
                   uid: u32| { policy.evaluate(target, tier, action, uid) },
             ) {
                 Ok(report) => {
-                    let total_bytes: u64 = report
-                        .findings
-                        .iter()
-                        .map(|f| f.metadata.storage.bytes)
-                        .sum();
+                    let total_bytes: u64 = report.summary.reclaimable_bytes_estimate;
                     let duration_ms = start.elapsed().as_millis() as u64;
 
                     let _ = sender.send(WorkerMessage::ScanComplete {

@@ -8,44 +8,41 @@ Root is architected as a local-first, modular, deterministic resource management
 graph TD
     subgraph UI_Frontends["Interface Layer"]
         CLI["root-cli (Terminal Interface)"]
-        GUI["root-gui (Future GTK4 + libadwaita GUI)"]
-        Timer["systemd user timer (Scheduled Inspections)"]
-        MonitorDaemon["root-monitor (Live Event Daemon)"]
+        GUI["root-gui (GTK4 + libadwaita GUI)"]
+        Timer["systemd user timer (Mode B Scheduled Inspections)"]
+        Monitor["root monitor (Mode C Live Event Monitoring)"]
     end
 
-    subgraph CoreEngine["Deterministic Core Engine"]
-        Core["root-core<br>• Domain Models<br>• 4-Tier Policy Engine<br>• Transaction Coordinator"]
-        Guardian["root-guardian<br>• Path Traversal Guards<br>• Symlink Jail Verifier<br>• TOCTOU Validator"]
-        Audit["root-audit<br>• JSONL Rollback Journal<br>• SHA256 Checksumming<br>• 'root undo' Handler"]
-        Storage["root-storage<br>• Filesystem Traversal<br>• Inode Deduplication<br>• Mount Boundary Guard"]
-        Memory["root-memory<br>• PSS / USS Computation<br>• PSI Pressure Stall Reader<br>• Kernel Cache Analyzer"]
-        Process["root-process<br>• Process Tree Generation<br>• pidfd Safe Signaling<br>• Orphan Fingerprinting"]
-        Workspace["root-workspace<br>• Git Porcelain Status<br>• Uncommitted Work Guard<br>• Language Detector"]
+    subgraph SecurityAndPolicy["Security & Governance Engine"]
+        Guardian["root-guardian<br>• 11-Stage Authorization Pipeline<br>• Descriptor Pinning (openat2)<br>• Framed Journal with CRC-32<br>• Read-Only Crash Reconciler<br>• Fault Injection Framework"]
+    end
+
+    subgraph CoreEngine["Deterministic Domain Core"]
+        Core["root-core<br>• Domain Models<br>• 4-Tier Policy Engine<br>• 12 Toolchain Discovery Rules<br>• Multi-Factor Lifecycle Engine<br>• Transaction Coordinates"]
     end
 
     subgraph PlatformLayer["Platform Abstraction Layer"]
-        PlatformTraits["root-platform<br>• FilesystemProvider<br>• ProcessProvider<br>• ResourceAccountant<br>• EnvironmentProvider<br>• FilesystemWatcher<br>• Scheduler"]
+        PlatformTraits["root-platform<br>• FilesystemProvider & Defensive Traversal<br>• ProcessProvider & pidfd Management<br>• ResourceAccountant & PSI Pressure Reader<br>• EnvironmentProvider & XDG Invariants<br>• AdvisoryLock (flock / LockFileEx)<br>• PinnedDirectory & Descriptor Operations"]
         LinuxBackend["Linux Engine (/proc, cgroups v2, pidfd, inotify, statx, systemd timer)"]
         MacBackend["macOS Adapter (libproc, sysctl, lstat, launchd LaunchAgents)"]
         WinBackend["Windows Adapter (Toolhelp32, FileIdInfo, Task Scheduler, GlobalMemoryStatusEx)"]
     end
 
     CLI --> Core
+    CLI --> PlatformTraits
+    CLI --> Guardian
+
     GUI --> Core
+    GUI --> PlatformTraits
+    GUI --> Guardian
+
     Timer --> CLI
-    MonitorDaemon --> Core
+    Monitor --> PlatformTraits
 
-    Core --> Guardian
-    Core --> Audit
-    Core --> Storage
-    Core --> Memory
-    Core --> Process
-    Core --> Workspace
+    Guardian --> Core
+    Guardian --> PlatformTraits
+    PlatformTraits --> Core
 
-    Storage --> PlatformTraits
-    Memory --> PlatformTraits
-    Process --> PlatformTraits
-    Workspace --> PlatformTraits
     PlatformTraits --> LinuxBackend
     PlatformTraits --> MacBackend
     PlatformTraits --> WinBackend
@@ -55,7 +52,7 @@ graph TD
 
 ## 2. Component Directory & Crate Topology
 
-Root is organized as a unified Cargo workspace. In Phase 00, the architecture is documented and established before crate initialization in Phase 01:
+Root is organized as a unified Cargo workspace comprising five cohesive crates:
 
 ```
 crates/
@@ -64,32 +61,33 @@ crates/
 │   ├── src/model/identity.rs       # Platform-neutral FileIdentity & IdentityKind
 │   ├── src/model/capabilities.rs   # 5-state explicit CapabilityStatus & PlatformCapabilities
 │   ├── src/model/schedule.rs       # ScheduleConfig, ScheduleInterval, ScheduleStatus models
-│   └── src/model/monitor.rs        # LiveFsEvent, ProcessObservation, MonitorBudget, DegradedReason
-├── root-platform/      # Cross-platform traits and read-only platform adapters
+│   ├── src/model/measurement.rs    # Exact storage, sparse allocation, and memory accounting
+│   ├── src/model/monitor.rs        # LiveFsEvent, ProcessObservation, MonitorBudget, DegradedReason
+│   └── src/discovery/              # Catalog of 12 discovery rules & multi-factor lifecycle engine
+├── root-platform/      # Cross-platform traits and platform adapters
 │   ├── src/traits.rs   # FilesystemProvider, ProcessProvider, ResourceAccountant, Scheduler, etc.
 │   ├── src/native.rs   # Compile-time selection of Native* platform adapters
 │   ├── src/traversal.rs# Defensive, bounded traversal engine with cycle & symlink jail protection
 │   ├── src/lock.rs     # Portable advisory lock (flock on POSIX, LockFileEx on Windows)
 │   ├── src/notify.rs   # Cross-platform desktop notification dispatcher & privacy fingerprinting
 │   ├── src/linux/      # Linux-specific implementation (/proc, cgroups v2, pidfd, inotify, systemd timer)
+│   │   └── descriptor.rs # PinnedDirectory & PinnedFile (openat2 with RESOLVE_BENEATH fallback)
 │   ├── src/macos/      # macOS read-only adapter (libproc, sysctl, launchd LaunchAgents, APFS clone awareness)
 │   ├── src/windows/    # Windows read-only adapter (Toolhelp32, FileIdInfo, Task Scheduler XML, GlobalMemoryStatusEx)
 │   └── src/mock/       # In-memory mock platform for deterministic testing
-├── root-guardian/      # Security engine, 11-stage decision pipeline, parent pinning, streaming SHA-256
-│   ├── src/authorization.rs # 11-stage pipeline, ConsentRecord, parent dir pinning, revalidate_full
+├── root-guardian/      # Security engine, 11-stage decision pipeline, descriptor pinning, recovery journal
+│   ├── src/authorization.rs # 11-stage pipeline, ConsentRecord, descriptor revalidation
 │   ├── src/crypto.rs        # Incremental FIPS 180-4 streaming Sha256Hasher, sha256_stream (64 KiB)
-│   ├── src/engine.rs        # TransactionEngine coordinating multi-stage quarantine & restoration
-│   ├── src/journal.rs       # Append-only JSON Lines recovery journal with directory metadata sync
+│   ├── src/descriptor.rs    # Descriptor-relative safety operations
+│   ├── src/engine.rs        # TransactionEngine coordinating descriptor-pinned quarantine & restoration
+│   ├── src/fault.rs         # Synthetic fault injection framework (FaultInterceptor)
+│   ├── src/journal.rs       # Versioned framed recovery journal with CRC-32 integrity & fsync ordering
 │   ├── src/policy.rs        # 4-tier protection rules & SafetyDecision engine
 │   ├── src/quarantine.rs    # Isolated quarantine store (0700 permissions)
+│   ├── src/reconciler.rs    # Read-only crash-state reconciliation engine (JournalReconciler)
 │   ├── src/restoration.rs   # Conflict-aware atomic restoration engine
 │   ├── src/sandbox.rs       # Level 1 synthetic fixture sandbox bounds enforcement
 │   └── src/transaction.rs   # 8-state transaction state machine with validated transition legality
-├── root-audit/         # Rollback journaling, SHA256 integrity, transaction logs
-├── root-storage/       # Filesystem scanner, hardlink deduplication, directory walk
-├── root-memory/        # PSS/USS computation, PSI memory pressure monitoring
-├── root-process/       # Process tree inspection, orphan detection, safe signaling
-├── root-workspace/     # Git repository state, branch checking, project detectors
 ├── root-cli/           # Terminal UI, interactive prompts, formatted output
 │   ├── args.rs         # Clap argument parsing, subcommands, and flags
 │   ├── doctor.rs       # Platform audit, kernel interface, and systemd scheduler diagnostics
@@ -104,12 +102,11 @@ crates/
 │   ├── interactive.rs  # Read-only interactive terminal navigation
 │   ├── terminal.rs     # NO_COLOR adherence, POSIX terminal width detection, tabular formatting
 │   └── history.rs      # XDG-compliant persistent scan history records
-├── root-monitor/       # (Future) Standalone monitoring daemon crate if split from platform
 └── root-gui/           # Native GNOME GTK4 + libadwaita desktop interface
     ├── model/          # Navigation, AppState, Designing-Skills formatters (tnum, middle truncation)
     ├── view_model/     # Decoupled view models (Overview, Resources, Agents, Processes, Activity, Schedule, Settings)
     ├── worker/         # Non-blocking InspectionWorker with cancellation and generation fencing
-    ├── gtk/            # Native GTK4/libadwaita windows and views (feature = "gtk")
+    ├── gtk/            # Native GTK4/libadwaita windows, vertical sidebar, and views (feature = "gtk")
     ├── app.rs          # Central application coordinator
     └── main.rs         # Desktop binary entry point
 ```

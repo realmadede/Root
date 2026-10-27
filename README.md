@@ -3,8 +3,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Linux (Tier 1) | macOS & Windows (Tier 3)](https://img.shields.io/badge/Platform-Linux%20(Tier%201)%20%7C%20macOS%20%26%20Windows%20(Tier%203)-red.svg)](docs/phase-12-platform-readiness.md)
 [![Rust: 1.85+](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](ARCHITECTURE.md)
-[![Status: Phase 12 Release Candidate](https://img.shields.io/badge/Status-Phase%2012%20Release%20Candidate-emerald.svg)](docs/phase-12-report.md)
-[![Tests: 250 Passing](https://img.shields.io/badge/Tests-250%20Passing-brightgreen.svg)](docs/phase-12-report.md)
+[![Status: v0.1.0-rc.1 Release Candidate](https://img.shields.io/badge/Status-v0.1.0--rc.1%20Release%20Candidate-emerald.svg)](docs/reports/final-v0.1.0-rc.1-evidence-reconciliation.md)
+[![Tests: 434 Passing](https://img.shields.io/badge/Tests-434%20Passing-brightgreen.svg)](docs/reports/final-v0.1.0-rc.1-evidence-reconciliation.md)
 
 **Root** is a deterministic, lightweight, security-first system utility engineered to help developers understand, audit, and safely inspect system resources accumulated through agentic and conversational coding workflows.
 
@@ -134,6 +134,12 @@ root inspect memory
 # Inspect active processes with credential sanitization
 root inspect processes --user-only
 
+# Explain resource provenance, classification rule, and safety decision
+root explain <rule-id-or-path>
+
+# Generate a comprehensive diagnostic and resource audit report
+root report
+
 # Check status of opt-in scheduled inspection service
 root schedule status
 
@@ -145,7 +151,7 @@ For detailed command options and examples, see [docs/cli-reference.md](docs/cli-
 
 ### Native Desktop Application (`root-gui`)
 
-Root includes a native GNOME desktop application built with GTK4 and Libadwaita adhering to the [Designing-Skills](https://github.com/realmadede/Designing-Skills.git) reference foundation.
+Root includes a native GNOME desktop application built with GTK4 and Libadwaita adhering to the [Designing-Skills](https://github.com/realmadede/Designing-Skills.git) reference foundation. It features a persistent left vertical sidebar with mutually coordinated page navigation and an operational safety status indicator:
 
 ```bash
 # Launch the desktop graphical interface
@@ -222,9 +228,9 @@ flowchart TD
 | Crate | Responsibility | Dependencies |
 |---|---|---|
 | [**`root-core`**](crates/root-core) | Domain models (`ResourceCandidate`, `ClassificationTier`), catalog of 12 discovery rules, multi-factor lifecycle engine, and synthetic test fixtures. | Minimal (pure Rust, `serde`) |
-| [**`root-platform`**](crates/root-platform) | Platform abstraction layer: Linux `/proc`, `statvfs`, PSI, `systemd --user` timers, and `inotify`; macOS `libproc`, `sysctl`, and `launchd`; Windows Toolhelp32, Task Scheduler XML, and reparse points; bounded traversal engine. | `libc`, POSIX syscalls, `windows-sys` (Windows) |
-| [**`root-guardian`**](crates/root-guardian) | Security enforcement: 11-stage authorization pipeline, parent directory pinning, streaming SHA-256 integrity verification, recovery journal, and 32 adversarial test scenarios. | `root-core`, `root-platform` |
-| [**`root-cli`**](crates/root-cli) | Terminal application providing status overview, capability diagnostics (`doctor`), resource inspection, discovery browsing, schedule configuration, and live monitoring. | `root-core`, `root-platform`, `root-guardian`, `clap` |
+| [**`root-platform`**](crates/root-platform) | Platform abstraction layer: Linux `/proc`, `statvfs`, PSI, `systemd --user` timers, and `inotify`; pinned directory descriptor abstraction (`PinnedDirectory`, `openat2`); macOS `libproc`, `sysctl`, and `launchd`; Windows Toolhelp32, Task Scheduler XML, and reparse points; bounded traversal engine. | `libc`, POSIX syscalls, `windows-sys` (Windows) |
+| [**`root-guardian`**](crates/root-guardian) | Security enforcement: 11-stage authorization pipeline, descriptor-pinned directory relocation, framed recovery journal with CRC-32 integrity and durability, read-only crash reconciler, synthetic fault injection framework, and over 200 adversarial and fault-injection tests. | `root-core`, `root-platform` |
+| [**`root-cli`**](crates/root-cli) | Terminal application providing status overview, capability diagnostics (`doctor`), resource inspection, discovery browsing, schedule configuration, explainability, reports, and live monitoring. | `root-core`, `root-platform`, `root-guardian`, `clap` |
 | [**`root-gui`**](crates/root-gui) | Native desktop application built with GTK4 and Libadwaita adhering to Designing-Skills reference design. Features 7 dedicated navigation views and headless compilation support. | Optional `gtk4`, `libadwaita` |
 
 ---
@@ -234,17 +240,20 @@ flowchart TD
 Root maintains a comprehensive automated test suite and invariant enforcement pipeline:
 
 ```bash
-# Run all 250 workspace tests
+# Run all 433 headless workspace tests
 cargo test --workspace --all-targets
 
-# Run headless tests without display server dependencies
-cargo test -p root-gui --no-default-features
+# Run native GTK GUI test suite (31 tests)
+cargo test --features gtk -p root-gui
+
+# Run unit tests for continuous assurance invariant rules
+python3 .github/scripts/test_invariants.py
 
 # Verify repository continuous assurance invariants
 python3 .github/scripts/check_invariants.py
 ```
 
-All 250 tests and all 11 continuous assurance invariants pass cleanly.
+All 434 unique Rust tests and all 12 continuous assurance invariants pass cleanly.
 
 ---
 
@@ -266,6 +275,7 @@ All 250 tests and all 11 continuous assurance invariants pass cleanly.
 | [**CONTRIBUTING.md**](CONTRIBUTING.md) | Contribution workflow, code standards, and setup instructions. |
 | [**docs/threat-model.md**](docs/threat-model.md) | Deep threat model (path traversal, TOCTOU, symlinks, PID reuse, mount escapes). |
 | [**docs/cleanup-policy.md**](docs/cleanup-policy.md) | Classification policy, Git safety invariants, and quarantine semantics. |
+| [**docs/maintenance-safety-contract.md**](docs/maintenance-safety-contract.md) | Foundational maintenance safety contract, explicit consent, and state preservation. |
 
 ### Packaging & Release Documentation
 | Document | Purpose |
@@ -273,11 +283,8 @@ All 250 tests and all 11 continuous assurance invariants pass cleanly.
 | [**docs/installation.md**](docs/installation.md) | Complete installation instructions for Debian `.deb`, tarball, and source. |
 | [**docs/uninstallation.md**](docs/uninstallation.md) | Clean removal instructions for all package and user formats. |
 | [**docs/release-process.md**](docs/release-process.md) | Repeatable release workflow, quality gates, and checksum verification. |
-| [**docs/phase-12-release-plan.md**](docs/phase-12-release-plan.md) | Phase 12 release strategy, packaging architecture, and deployment gates. |
-| [**docs/phase-12-platform-readiness.md**](docs/phase-12-platform-readiness.md) | Multi-platform support matrix and validation evidence. |
-| [**docs/phase-12-security-review.md**](docs/phase-12-security-review.md) | Pre-release security review and invariant verification. |
-| [**docs/phase-12-validation-report.md**](docs/phase-12-validation-report.md) | Comprehensive test suite and packaging validation evidence. |
-| [**docs/phase-12-report.md**](docs/phase-12-report.md) | Phase 12 final completion report and release readiness decision. |
+| [**docs/reports/final-v0.1.0-rc.1-release-validation.md**](docs/reports/final-v0.1.0-rc.1-release-validation.md) | Comprehensive release validation, test metrics, and packaging audit. |
+| [**docs/reports/final-v0.1.0-rc.1-evidence-reconciliation.md**](docs/reports/final-v0.1.0-rc.1-evidence-reconciliation.md) | Final evidence reconciliation, boundary verification, and authorization gate. |
 
 ### Milestone Completion Reports
 - [Phase 00 Completion Report](docs/phase-00-report.md): Foundation, Research, Architecture & Threat Model
@@ -293,6 +300,15 @@ All 250 tests and all 11 continuous assurance invariants pass cleanly.
 - [Phase 10 Completion Report](docs/phase-10-report.md): Cross-Platform Expansion (macOS & Windows)
 - [Phase 11 Completion Report](docs/phase-11-report.md): Production Mutation Security Architecture & Adversarial Validation
 - [Phase 12 Completion Report](docs/phase-12-report.md): Production Hardening, Packaging, and Distribution
+- [Phase 13 Completion Report](docs/reports/phase-13-read-only-hardening.md): Read-Only Correctness, Classification Safety, and User Experience
+- [Phase 14 Completion Report](docs/reports/phase-14-evidence-attribution-readiness.md): Evidence Quality, Resource Attribution, and Maintenance Readiness
+- [Phase 14 Review Reconciliation](docs/reports/phase-14-review-reconciliation.md): Safety Contract Corrections and Test-Count Reconciliation
+- [Phase 15 Filesystem Safety Plan](docs/reports/phase-15-filesystem-safety-plan.md): Guardian Architecture and Filesystem Safety Plan
+- [Work Package 15.1 Report](docs/reports/wp-15.1-pinned-directory-abstraction.md): Pinned Directory Descriptor Abstraction (`openat2`)
+- [Work Package 15.2 Report](docs/reports/wp-15.2-descriptor-pinned-guardian-pipeline.md): Descriptor-Pinned Guardian Pipeline and Race-Resistance Verification
+- [Work Package 15.3 Report](docs/reports/wp-15.3-journal-durability-reconciliation.md): Framed Recovery Journal, Durability, and Crash-State Reconciliation
+- [Work Package 15.4 Report](docs/reports/wp-15.4-adversarial-verification.md): Synthetic Fault-Injection Framework and Adversarial Verification
+- [Work Package 15.5 Report](docs/reports/wp-15.5-continuous-assurance-audit.md): Continuous Assurance Audit and Security Gate
 
 ---
 

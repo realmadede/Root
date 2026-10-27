@@ -191,9 +191,17 @@ fn show_single_finding_detail(item: &DiscoveryFinding) {
         "  Multi-Link Sharing  : {}",
         item.metadata.storage.is_multi_link
     );
+    println!(
+        "  Hard Link Count     : {}",
+        item.metadata.storage.link_count
+    );
 
     println!("\nLifecycle Assessment:");
     println!("  Lifecycle State     : {:?}", item.lifecycle.state);
+    println!(
+        "  Process Attribution : {}",
+        item.lifecycle.attribution.display_badge()
+    );
     println!("  Reasoning           : {}", item.lifecycle.reasoning);
     if let Some(pid) = item.lifecycle.associated_pid {
         println!("  Associated PID      : {}", pid);

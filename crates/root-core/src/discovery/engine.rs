@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use super::{
@@ -80,7 +80,17 @@ impl DiscoveryEngine {
         policy: &dyn Fn(&FindingTarget, ProtectionTier, ProposedAction, u32) -> SafetyDecision,
     ) -> Result<DiscoveryReport> {
         let mut findings = Vec::new();
-        let mut seen_inodes = HashSet::new();
+        let mut counted_inodes = HashSet::new();
+
+        // Pre-count occurrences of physical inodes to determine if multi-link files
+        // have all references contained within the inspected scope.
+        let mut observed_inodes = HashMap::new();
+        for (_, _, dev, ino) in entries {
+            if *dev != 0 || *ino != 0 {
+                *observed_inodes.entry((*dev, *ino)).or_insert(0usize) += 1;
+            }
+        }
+
         let mut summary = DiscoverySummary {
             total_inspected: entries.len() as u64,
             skipped_count: ctx.skipped_count,
@@ -90,13 +100,14 @@ impl DiscoveryEngine {
         };
 
         for (path, metadata, dev, ino) in entries {
-            let finding = ResourceClassifier::classify_entry(
+            let finding = ResourceClassifier::classify_entry_with_capabilities(
                 path,
                 metadata,
                 *dev,
                 *ino,
                 ctx.current_uid,
                 ctx.active_processes,
+                Some(&ctx.capabilities),
                 policy,
             );
 
@@ -105,18 +116,44 @@ impl DiscoveryEngine {
                 continue;
             }
 
+            let is_candidate_tier = matches!(
+                finding.protection_tier,
+                ProtectionTier::UserConfirmRequired
+                    | ProtectionTier::ObsoleteTransient
+                    | ProtectionTier::SafeRecoverable
+            );
+
+            // Candidate estimate eligibility: only inactive candidate files qualify.
+            // Active sessions, directory dentry tables, and symlinks do not represent
+            // guaranteed or candidate unlinked file bytes.
+            let is_eligible_for_estimate = is_candidate_tier
+                && finding.lifecycle.state != LifecycleState::Active
+                && finding.metadata.file_type != crate::model::FileType::Directory
+                && finding.metadata.file_type != crate::model::FileType::Symlink;
+
             let is_new_inode = if *dev != 0 || *ino != 0 {
-                seen_inodes.insert((*dev, *ino))
+                counted_inodes.insert((*dev, *ino))
             } else {
                 true
             };
 
-            let reclaimable_bytes = if is_new_inode {
+            let reclaimable_bytes = if is_eligible_for_estimate && is_new_inode {
                 if finding.metadata.storage.is_multi_link {
-                    finding.metadata.storage.unique_bytes
-                } else if finding.metadata.storage.is_sparse
-                    && finding.metadata.storage.allocated_bytes > 0
-                {
+                    let observed_count = observed_inodes.get(&(*dev, *ino)).copied().unwrap_or(1);
+                    // If all links referencing this inode are accounted for within this scan,
+                    // unlinking all candidate references would release the physical allocated blocks.
+                    // If observed_count < link_count, external links exist and unlinking candidate
+                    // references frees zero physical disk blocks while external links remain.
+                    if observed_count >= finding.metadata.storage.link_count as usize {
+                        if finding.metadata.storage.is_sparse {
+                            finding.metadata.storage.allocated_bytes
+                        } else {
+                            finding.metadata.storage.bytes
+                        }
+                    } else {
+                        0
+                    }
+                } else if finding.metadata.storage.is_sparse {
                     finding.metadata.storage.allocated_bytes
                 } else {
                     finding.metadata.storage.bytes
