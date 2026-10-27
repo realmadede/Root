@@ -180,11 +180,16 @@ fn test_02_object_replacement_after_inspection_toctou() {
     )
     .is_ok());
 
-    // Injected fault: Replace the file with a newly created file (different inode)
-    fs::remove_file(&file).expect("Remove original file");
-    let mut f = File::create(&file).expect("Recreate file with new inode");
-    f.write_all(b"replacement malicious content")
-        .expect("Write replacement content");
+    // Injected fault: Create substitute file while original exists to guarantee a distinct inode,
+    // then atomically rename over the original path.
+    let substitute = env.write_file("toctou_substitute.txt", b"replacement malicious content");
+    let sub_meta = fs::metadata(&substitute).expect("Stat substitute file");
+    assert_ne!(
+        expected_ino,
+        sub_meta.ino(),
+        "Substitute file must have distinct inode"
+    );
+    fs::rename(&substitute, &file).expect("Rename substitute over original file");
 
     // Revalidation against original expected inode must be refused
     let res = AuthorizationEngine::revalidate_pinned(
